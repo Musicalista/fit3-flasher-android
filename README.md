@@ -28,7 +28,10 @@ The interface follows Material You. Russian and English are supported.
 - Back up settings and saved data.
 - Light, dark, and AMOLED themes, with adaptive and custom accent colors.
 - Home screen card editor — **BETA**.
-- Communication log and diagnostic tools.
+- A firmware flasher with file validation, installation progress and a log. Operation has been confirmed on a real Galaxy Fit3.
+- Redesigned debug mode and diagnostic tools.
+
+All firmware modifications are performed at your own risk. The app author accepts no responsibility for any resulting problems.
 
 ## Requirements
 

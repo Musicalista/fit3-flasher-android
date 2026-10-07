@@ -9,10 +9,9 @@ import org.junit.Test
 
 class Fit3PedometerBackSyncTest {
     private val zone = ZoneId.of("Europe/Moscow")
-    // Synthetic scenarios, not original measurements or capture timestamps.
-    private val now = Instant.parse("2020-01-02T14:30:01Z").toEpochMilli()
+    private val now = Instant.parse("2026-09-30T14:30:01Z").toEpochMilli()
     private fun record(steps: Int) = Fit3HealthCodec.StepRecord(steps, steps, 0, steps * .7, steps * .03, 12000)
-    private fun at(time: String) = Instant.parse("2020-01-02T${time}Z").toEpochMilli()
+    private fun at(time: String) = Instant.parse("2026-09-30T${time}Z").toEpochMilli()
 
     @Test fun stockBinningRowsAre24BytesAndIndexIsLocalMinute() {
         val state = Fit3HealthCodec.State(stepDay = 20726, stepRecords = mapOf(
@@ -47,10 +46,10 @@ class Fit3PedometerBackSyncTest {
     }
 
     @Test fun differentIntervalsSurviveResetAndCanBeRestored() {
-        val merged = Fit3PedometerBackSync.mergeRecords(mapOf(at("07:00:00") to record(100)),
+        val merged = Fit3PedometerBackSync.mergeRecords(mapOf(at("07:00:00") to record(591)),
             mapOf(at("14:02:00") to record(18), at("14:12:00") to record(19)), now, zone)
-        assertEquals(137, merged.values.sumOf { it.count })
-        assertEquals(137, Fit3PedometerBackSync.mergeRecords(merged, merged, now, zone).values.sumOf { it.count })
+        assertEquals(628, merged.values.sumOf { it.count })
+        assertEquals(628, Fit3PedometerBackSync.mergeRecords(merged, merged, now, zone).values.sumOf { it.count })
     }
 
     @Test fun onlyTodayIsSentNotYesterdayFutureOrSyntheticTotal() {
@@ -144,29 +143,29 @@ class Fit3PedometerBackSyncTest {
         val day = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
         val before = Fit3HealthCodec.State(steps = 37, stepsPartial = true, stepDay = day,
             stepRecords = mapOf(at("14:02:01") to record(18), at("14:02:48") to record(19)),
-            sleepMinutes = 420, stepHistory = listOf(18, 37))
+            sleepMinutes = 314, stepHistory = listOf(18, 37))
         val after = Fit3PedometerBackSync.reconcile(before, now, zone)
         assertEquals(19, after.steps); assertEquals(1, after.stepRecords.size)
-        assertEquals(420, after.sleepMinutes); assertEquals(before.stepHistory, after.stepHistory)
+        assertEquals(314, after.sleepMinutes); assertEquals(before.stepHistory, after.stepHistory)
         assertEquals(after, Fit3PedometerBackSync.reconcile(after, now, zone))
     }
 
     @Test fun responseDoesNotChangeAnyMeasurementAndUsesNoFieldCount() {
         val reply = byteArrayOf(0xC7.toByte(), 0xE0.toByte(), 3, 0)
-        val old = Fit3HealthCodec.State(steps = 137)
+        val old = Fit3HealthCodec.State(steps = 628)
         assertEquals(3, Fit3HealthCodec.sequence(reply))
         assertEquals(old.steps, Fit3HealthCodec.handle(old, reply, now).state.steps)
         assertNull(Fit3PedometerBackSync.responseSequence(byteArrayOf(0xC7.toByte())))
     }
 
     @Test fun differentWatchDoesNotReceiveOtherWatchIntervals() {
-        val old = Fit3HealthCodec.State(steps = 137, stepSourceAddress = "AA:BB:CC:DD:EE:FF",
-            stepRecords = mapOf(at("14:02:00") to record(137)), sleepMinutes = 420)
+        val old = Fit3HealthCodec.State(steps = 628, stepSourceAddress = "AA:BB:CC:DD:EE:FF",
+            stepRecords = mapOf(at("14:02:00") to record(628)), sleepMinutes = 314)
         val request = byteArrayOf(3, 0xE0.toByte(), 1, 0)
         val same = Fit3HealthAcceptance.accept(old, request, now, "aa:bb:cc:dd:ee:ff") { _, _ -> }
-        assertEquals(137, same.state.steps)
+        assertEquals(628, same.state.steps)
         val other = Fit3HealthAcceptance.accept(old, request, now, "11:22:33:44:55:66") { _, _ -> }
         assertNull(other.state.steps); assertTrue(other.state.stepRecords.isEmpty())
-        assertEquals(420, other.state.sleepMinutes)
+        assertEquals(314, other.state.sleepMinutes)
     }
 }

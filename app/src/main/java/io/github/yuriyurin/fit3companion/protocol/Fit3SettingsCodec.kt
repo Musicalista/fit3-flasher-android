@@ -52,6 +52,7 @@ object Fit3SettingsCodec {
         val statusIndicator: Int? = null,
         val vibrationIntensity: Int? = null,
         val sleepMode: Boolean? = null,
+        val syncSleepMode: Boolean? = null,
         val theatreMode: Boolean? = null,
         val rightWrist: Boolean? = null,
         val buttonOnRight: Boolean? = null,
@@ -86,9 +87,10 @@ object Fit3SettingsCodec {
         SaMessageCodec.fixedRequest(MSG_TIMEOUT, SaMessageCodec.boolParam(P_BUTTON_POSITION, enabled))
     fun setAutoMediaControl(enabled: Boolean): ByteArray = displayBool(P_AUTO_MEDIA, enabled)
     fun setSleepMode(enabled: Boolean): ByteArray =
-        SaMessageCodec.fixedRequest(MSG_SLEEP_MODE_NOW, SaMessageCodec.boolParam(P_SLEEP_MODE_ON, enabled))
+        // Samsung sends mode state as TYPE_RESPONSE, not as a settings request.
+        SaMessageCodec.fixedResponse(MSG_SLEEP_MODE_NOW, SaMessageCodec.boolParam(P_SLEEP_MODE_ON, enabled))
     fun setTheatreMode(enabled: Boolean): ByteArray =
-        SaMessageCodec.fixedRequest(MSG_THEATRE_MODE_NOW, SaMessageCodec.boolParam(P_THEATRE_MODE_ON, enabled))
+        SaMessageCodec.fixedResponse(MSG_THEATRE_MODE_NOW, SaMessageCodec.boolParam(P_THEATRE_MODE_ON, enabled))
 
     private fun displayBool(param: Int, enabled: Boolean): ByteArray =
         SaMessageCodec.fixedRequest(MSG_DISPLAY, SaMessageCodec.boolParam(param, enabled))
@@ -142,6 +144,8 @@ object Fit3SettingsCodec {
                     doublePressAction = p[P_DOUBLE_PRESS] ?: old.doublePressAction,
                     statusIndicator = p[P_STATUS_INDICATOR] ?: old.statusIndicator,
                     vibrationIntensity = p[P_VIBRATION_INTENSITY] ?: old.vibrationIntensity,
+                    // Phone mode integration is a separate flag, not the current sleep state.
+                    syncSleepMode = p[P_SYNC_SLEEP_MODE]?.let(::bool) ?: old.syncSleepMode,
                     rightWrist = p[P_WRIST_INFO]?.let(::bool) ?: old.rightWrist,
                     buttonOnRight = p[P_BUTTON_POSITION]?.let(::bool) ?: old.buttonOnRight,
                 )

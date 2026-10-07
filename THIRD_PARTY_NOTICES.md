@@ -31,6 +31,11 @@ Gradle, the Android SDK, Kotlin, AndroidX, and JUnit remain subject to their
 respective licenses. Dependencies are declared in the Gradle build files;
 their local installation directories and dependency caches are not included.
 
+## Open Sans
+
+The bundled Open Sans font and derived glyph data are covered by the SIL Open
+Font License 1.1. See [the font license](app/src/main/assets/fit3ui/OpenSans-OFL.txt).
+
 ## Project license
 
 Copyright © 2026 yuriyurin. The Fit3 App source code is licensed under the

@@ -23,10 +23,10 @@ class Fit3HealthLargeDataReceiverTest {
     private fun intervalPayload(): ByteArray = ByteArrayOutputStream().apply {
         write(byteArrayOf(0x82.toByte(), 3, 0xe0.toByte(), 0x6d, 0x28, 7))
         val times = listOf(
-            "2020-01-01T21:10:00Z", "2020-01-01T21:20:00Z",
-            "2020-01-01T21:30:00Z", "2020-01-01T22:00:00Z",
+            "2026-09-27T21:53:00Z", "2026-09-27T21:54:00Z",
+            "2026-09-27T21:55:00Z", "2026-09-27T22:32:00Z",
         )
-        listOf(20, 30, 40, 30).forEachIndexed { index, steps ->
+        listOf(23, 39, 30, 26).forEachIndexed { index, steps ->
             val secondsSince1990 = (Instant.parse(times[index]).epochSecond - 631_152_000L).toInt()
             write(if (index == 3) 0 else 1)
             field(5, secondsSince1990)
@@ -44,11 +44,11 @@ class Fit3HealthLargeDataReceiverTest {
         }
     }.toByteArray() + byteArrayOf(
         // A summary-looking byte sequence elsewhere in a bulk payload must not overwrite
-        // today's synthetic 120 steps with a false 12,648-step reading.
+        // today's 118 intervals with a false 12,648-step reading.
         0x93.toByte(), 0x12, 0x68, 0x31, 0, 0,
     )
 
-    @Test fun assemblesAndAcknowledgesSyntheticStepsFromTwoChunks() {
+    @Test fun assemblesAndAcknowledges118StepsFromTwoChunks() {
         val originalZone = TimeZone.getDefault()
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/Moscow"))
         try {
@@ -61,13 +61,13 @@ class Fit3HealthLargeDataReceiverTest {
             assertArrayEquals(payload, last.payload)
             assertArrayEquals(byteArrayOf(0x3e, 0x09, 2, 0, 0, 0), last.reply)
             val incoming = Fit3HealthCodec.handle(
-                Fit3HealthCodec.State(steps = 50, stepsPartial = true,
-                    stepDay = java.time.LocalDate.of(2020, 1, 1).toEpochDay()),
-                last.payload!!, Instant.parse("2020-01-01T23:05:00Z").toEpochMilli(),
+                Fit3HealthCodec.State(steps = 87, stepsPartial = true,
+                    stepDay = java.time.LocalDate.of(2026, 9, 27).toEpochDay()),
+                last.payload!!, Instant.parse("2026-09-27T23:05:00Z").toEpochMilli(),
             )
-            assertEquals(120, incoming.state.steps)
+            assertEquals(118, incoming.state.steps)
             assertEquals(4, incoming.state.stepRecords.size)
-            assertEquals(java.time.LocalDate.of(2020, 1, 2).toEpochDay(), incoming.state.stepDay)
+            assertEquals(java.time.LocalDate.of(2026, 9, 28).toEpochDay(), incoming.state.stepDay)
             assertArrayEquals(byteArrayOf(
                 0x42, 0x02, 0xE0.toByte(), 0x6D, 0x28,
                 0x04, 0x02, 0x01, 0x01,

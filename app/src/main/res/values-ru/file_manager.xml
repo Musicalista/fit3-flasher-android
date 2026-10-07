@@ -1,0 +1,29 @@
+<resources>
+    <string name="files_console_unavailable">Эта прошивка блокирует список и удаление файлов. Нужен патч Fit3Files для user bin. Отправка и скачивание по имени доступны.</string>
+    <string name="files_download_by_name">Скачать по имени</string>
+    <string name="files_manager">Файловый менеджер</string>
+    <string name="files_delete_question">Удалить %1$s?</string>
+    <string name="files_bytes">%1$d Б</string>
+    <string name="files_title">Файлы на часах</string>
+    <string name="files_help">Отправка и скачивание до 16 МиБ. Запись доступна в /user. Папки удаляются только пустыми.</string>
+    <string name="files_folder">Папка</string>
+    <string name="files_up">Вверх</string>
+    <string name="files_refresh">Обновить</string>
+    <string name="files_upload">Отправить</string>
+    <string name="files_new_folder">Новая папка</string>
+    <string name="files_connect">Подключите часы</string>
+    <string name="files_cancel">Отмена</string>
+    <string name="files_open">Открыть</string>
+    <string name="files_download">Скачать</string>
+    <string name="files_delete">Удалить</string>
+    <string name="files_create_folder">Создать папку</string>
+    <string name="files_upload_file">Отправить файл</string>
+    <string name="files_name">Имя на часах</string>
+    <string name="files_create">Создать</string>
+    <string name="files_overwrite">Существующий файл будет перезаписан.</string>
+    <string name="files_choose_refresh">Нажмите «Обновить», чтобы открыть папку</string>
+    <string name="files_working">Выполняется…</string>
+    <string name="files_verifying">Проверка записанного файла…</string>
+    <string name="files_done">Готово</string>
+    <string name="files_cancelled">Отменено. При отправке файл мог остаться частично записанным.</string>
+</resources>

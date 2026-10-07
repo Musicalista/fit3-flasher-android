@@ -249,6 +249,25 @@ class MainActivity : ComponentActivity() {
     private var autoBackupFolder by mutableStateOf<String?>(null)
     private var firstRunPermissions = false
     private var showListenerAccessPrompt by mutableStateOf(false)
+    private val chooseReportFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            val report = ErrorReport.export()
+            Thread {
+                val saved = runCatching {
+                    val parent = android.provider.DocumentsContract.buildDocumentUriUsingTree(uri,
+                        android.provider.DocumentsContract.getTreeDocumentId(uri))
+                    val name = "Fit3-App-report-${java.time.Instant.now().toEpochMilli()}.txt"
+                    val file = android.provider.DocumentsContract.createDocument(contentResolver, parent, "text/plain", name)
+                        ?: error("Cannot create report")
+                    contentResolver.openOutputStream(file, "wt")?.use { it.write(report.toByteArray(Charsets.UTF_8)) }
+                        ?: error("Cannot write report")
+                }.onFailure { ErrorReport.record(ErrorReport.Event.EXPORT_FAILED, it) }.isSuccess
+                runOnUiThread { android.widget.Toast.makeText(this,
+                    getString(if (saved) R.string.error_report_saved else R.string.error_report_save_failed),
+                    android.widget.Toast.LENGTH_LONG).show() }
+            }.start()
+        }
+    }
     private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) try {
             contentResolver.openOutputStream(uri, "wt")?.use { out ->
@@ -305,9 +324,8 @@ class MainActivity : ComponentActivity() {
             backupMessage = "Папка для автоматических копий выбрана"
         } catch (error: Exception) { backupMessage = "Нет доступа к папке: ${error.message}" }
     }
-    private var firmwareFile by mutableStateOf<FirmwareFile?>(null)
     private val chooseFirmware = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) inspectFirmware(uri)
+        if (uri != null) connectionService?.chooseFirmware(uri)
     }
     private val customFaceLibrary by lazy { io.github.yuriyurin.fit3companion.ble.CustomFaceLibrary(this) }
     private var customFaces by mutableStateOf<List<io.github.yuriyurin.fit3companion.ble.CustomFace>>(emptyList())
@@ -472,6 +490,7 @@ class MainActivity : ComponentActivity() {
                     onSetQuickPanel = { connectionService?.setQuickPanel(it) },
                     onSetQuickMessages = { connectionService?.setQuickMessages(it) },
                     onClearProtocolLog = { connectionService?.clearProtocolLog() },
+                    onSaveErrorReport = { chooseReportFolder.launch(null) },
                     onCopyProtocolLog = {
                         val report = buildString {
                             appendLine("Fit3 App protocol log")
@@ -510,8 +529,8 @@ class MainActivity : ComponentActivity() {
                         showListenerAccessPrompt = false
                         if (it) startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },
-                    firmwareFile = firmwareFile,
                     onChooseFirmware = { chooseFirmware.launch(arrayOf("application/octet-stream", "*/*")) },
+                    onFlashFirmware = { connectionService?.flashFirmware(it) },
                     customLibrary = customFaceLibrary,
                     customFaces = customFaces,
                     customImporting = customImporting,
@@ -741,32 +760,6 @@ class MainActivity : ComponentActivity() {
             .isIgnoringBatteryOptimizations(packageName)
     }
 
-    private fun inspectFirmware(uri: Uri) {
-        firmwareFile = FirmwareFile("Проверка файла…", 0, "", false)
-        Thread {
-            val result = try {
-                val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                    ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Выбранный файл"
-                val digest = MessageDigest.getInstance("SHA-256")
-                var size = 0L
-                contentResolver.openInputStream(uri)?.use { input ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        size += read
-                        if (size > 32L * 1024 * 1024) error("Файл больше 32 МБ")
-                        digest.update(buffer, 0, read)
-                    }
-                } ?: error("Не удалось открыть файл")
-                FirmwareFile(name, size, digest.digest().joinToString("") { "%02x".format(it) }, true)
-            } catch (error: Exception) {
-                FirmwareFile("Ошибка проверки", 0, error.message ?: "Неизвестная ошибка", false)
-            }
-            runOnUiThread { firmwareFile = result }
-        }.start()
-    }
-
     private fun inspectLocalFace(uri: Uri) {
         val selectionToken = ++localFaceSelectionToken
         customImporting = true
@@ -826,7 +819,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class FirmwareFile(val name: String, val size: Long, val sha256: String, val valid: Boolean)
 private data class LocalFaceFile(
     val sourceName: String,
     val size: Int = 0,
@@ -850,33 +842,35 @@ private enum class Page(val label: String) {
     BACKUP("Резервная копия"), ABOUT("О приложении"), DEBUG("Отладка"),
     LICENSES("Лицензии и благодарности"),
     NOTIFICATIONS("Уведомления"), POWER("Энергосбережение"),
-    FLASHER("Прошивальщик"), APPEARANCE("Внешний вид"),
+    FIT3UI("Fit3UI"), FILES("Файловый менеджер"), FLASHER("Прошивальщик"), APPEARANCE("Внешний вид"),
     HEALTH_SYNC("Синхронизация Fit3 Health"), SLEEP("Сон"),
     WATCH_MODES("Режимы"), WATCH_LAYOUT("Меню и карточки"), WATCH_TIME("Время"),
     WATCH_ORIENTATION("Ношение браслета"),
-    PROTOCOL_LOG("Журнал протокола")
+    PROTOCOL_LOG("Журнал протокола"), ERROR_REPORT("Отчёт об ошибке"), CONNECTION_STATE("Состояние связи")
 }
 
 private fun Page.backDestination(): Page? = when (this) {
     Page.HOME -> null
     Page.ACTIVITY, Page.FACES, Page.SETTINGS, Page.DISCOVERY -> Page.HOME
-    Page.FLASHER -> Page.DEBUG
-    Page.PROTOCOL_LOG -> Page.DEBUG
+    Page.FLASHER, Page.FILES, Page.FIT3UI -> Page.DEBUG
+    Page.PROTOCOL_LOG, Page.CONNECTION_STATE -> Page.DEBUG
+    Page.ERROR_REPORT -> Page.DEBUG
     Page.FACE_GALLERY, Page.CUSTOM_FACES, Page.WATCH_SETTINGS, Page.WATCH_MODES, Page.WATCH_LAYOUT,
     Page.WATCH_TIME, Page.WATCH_ORIENTATION -> Page.FACES
     Page.FACE_VARIANTS -> Page.FACE_GALLERY
     Page.WIDGETS, Page.APPS, Page.QUICK_PANEL, Page.QUICK_MESSAGES -> Page.WATCH_LAYOUT
-    Page.BACKUP, Page.ABOUT, Page.DEBUG, Page.NOTIFICATIONS, Page.APPEARANCE,
+    Page.BACKUP, Page.ABOUT, Page.NOTIFICATIONS, Page.APPEARANCE,
     Page.POWER -> Page.SETTINGS
     Page.LICENSES -> Page.ABOUT
     Page.HEALTH_SYNC -> Page.DEBUG
+    Page.DEBUG -> Page.ACTIVITY
     Page.SLEEP -> Page.ACTIVITY
 }
 
 private fun Page.depth(): Int = when (this) {
     Page.HOME, Page.ACTIVITY, Page.FACES -> 0
     Page.SETTINGS -> 1
-    Page.FLASHER, Page.PROTOCOL_LOG, Page.WIDGETS, Page.APPS, Page.QUICK_PANEL,
+    Page.FILES, Page.FLASHER, Page.PROTOCOL_LOG, Page.WIDGETS, Page.APPS, Page.QUICK_PANEL,
     Page.QUICK_MESSAGES -> 3
     else -> 2
 }
@@ -985,6 +979,7 @@ private fun CompanionScreen(
     onSetQuickPanel: (List<Int>) -> Unit,
     onSetQuickMessages: (List<String>) -> Unit,
     onClearProtocolLog: () -> Unit,
+    onSaveErrorReport: () -> Unit,
     onCopyProtocolLog: () -> Unit,
     onCopyCompactProtocolLog: () -> Unit,
     onSaveBackup: () -> Unit,
@@ -996,8 +991,8 @@ private fun CompanionScreen(
     onChooseBackupFolder: () -> Unit,
     showListenerAccessPrompt: Boolean,
     onListenerAccessPrompt: (Boolean) -> Unit,
-    firmwareFile: FirmwareFile?,
     onChooseFirmware: () -> Unit,
+    onFlashFirmware: (Boolean) -> Unit,
     customLibrary: io.github.yuriyurin.fit3companion.ble.CustomFaceLibrary,
     customFaces: List<io.github.yuriyurin.fit3companion.ble.CustomFace>,
     customImporting: Boolean,
@@ -1033,6 +1028,8 @@ private fun CompanionScreen(
     LaunchedEffect(customLibrary) { onCustomFacesChanged() }
     val installedVersionName = remember(context) { getInstalledVersionName(context) }
     val uiScope = rememberCoroutineScope()
+    val debugTaps = remember { DebugTapSequence() }
+    LaunchedEffect(page) { if (page != Page.ACTIVITY) debugTaps.reset() }
     val gearAngle = remember { Animatable(0f) }
     var manualRefreshing by remember { mutableStateOf(false) }
     var manualRefreshStarted by remember { mutableStateOf(0L) }
@@ -1087,8 +1084,9 @@ private fun CompanionScreen(
         if (!showCityDialog) return@LaunchedEffect
         val query = cityQuery.trim()
         if (query.length < 3) {
-            citySuggestions = popularWeatherCities.filter {
-                it.name.startsWith(query, ignoreCase = true)
+            citySuggestions = popularWeatherCities.map { it.localizedBuiltin(AppStrings.locale.language) }.filter {
+                it.name.startsWith(query, ignoreCase = true) ||
+                    popularWeatherCities.first { original -> original.id == it.id }.name.startsWith(query, ignoreCase = true)
             }.take(6)
         } else {
             delay(350)
@@ -1105,6 +1103,8 @@ private fun CompanionScreen(
     Scaffold(
         topBar = { TopAppBar(title = { Text(if (homeEditing) "Редактор главной"
             else if (page in listOf(Page.HOME, Page.ACTIVITY, Page.FACES)) "Fit3 App"
+            else if (page == Page.ERROR_REPORT) stringResource(R.string.error_report_title)
+            else if (page == Page.FILES) stringResource(R.string.files_manager)
             else if (page == Page.CUSTOM_FACES) stringResource(R.string.custom_faces_title) else page.label) }, navigationIcon = {
             if (homeEditing) IconButton(onClick = { homeEditing = false }) {
                 Text("‹", style = MaterialTheme.typography.headlineLarge)
@@ -1149,7 +1149,12 @@ private fun CompanionScreen(
                                 indication = null,
                             ) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onPage(destination)
+                                if (destination == Page.ACTIVITY && debugTaps.tap(android.os.SystemClock.elapsedRealtime())) {
+                                    onPage(Page.DEBUG)
+                                } else {
+                                    if (destination != Page.ACTIVITY) debugTaps.reset()
+                                    onPage(destination)
+                                }
                             },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -1333,6 +1338,9 @@ private fun CompanionScreen(
                 }
                 Page.SLEEP -> {
                     item { SleepDetails(snapshot.health) }
+                }
+                Page.ERROR_REPORT -> {
+                    item { ErrorReportSettings(onSaveErrorReport) }
                 }
                 Page.FACES -> {
                     item { CurrentFaceCard(snapshot, currentOfficialStyle, currentOfficialFace?.name, faceCatalog,
@@ -1558,7 +1566,6 @@ private fun CompanionScreen(
                         { onPage(Page.POWER) }) }
                     item { SettingsChoice("Внешний вид", stringResource(R.string.appearance_subtitle), { onPage(Page.APPEARANCE) }) }
                     item { SettingsChoice("Резервная копия", "Бэкап настроек браслета", { onPage(Page.BACKUP) }) }
-                    item { SettingsChoice("Режим отладки", "Проверки, журнал и прошивальщик", { onPage(Page.DEBUG) }) }
                     item { SettingsChoice("О приложении", "Fit3 App", { onPage(Page.ABOUT) }) }
                 }
                 Page.WATCH_SETTINGS -> {
@@ -1725,29 +1732,12 @@ private fun CompanionScreen(
                     } }
                 }
                 Page.DEBUG -> {
-                    item { Card {
-                        Column(Modifier.fillMaxWidth().padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text("Состояние связи", style = MaterialTheme.typography.titleMedium)
-                            Text(snapshot.status)
-                            Text("Канал данных: ${if (snapshot.sapReady) "готов" else "не готов"} · пакетов в памяти: ${snapshot.protocolLog.size}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Health: ${snapshot.healthStatus}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } }
-                    item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onRefresh, enabled = snapshot.sapReady) {
-                            Text("Обновить всё")
-                        }
-                        OutlinedButton(onClick = onRequestHealth, enabled = snapshot.sapReady) {
-                            Text("Запрос Health")
-                        }
-                    } }
-                    item { OutlinedButton(onClick = onRequestHealthCapabilityForDebug, enabled = snapshot.sapReady) {
-                        Text("Проверить обмен Health")
-                    } }
+                    item { SettingsChoice(stringResource(R.string.error_report_title),
+                        stringResource(R.string.error_report_subtitle), { onPage(Page.ERROR_REPORT) }) }
+                    item { SettingsChoice("Состояние связи", "", { onPage(Page.CONNECTION_STATE) }) }
                     item { SettingsChoice("Прошивальщик", "Выбор и проверка пакета", { onPage(Page.FLASHER) }) }
+                    item { SettingsChoice("Fit3UI", "Свои циферблаты: установка и управление", { onPage(Page.FIT3UI) }) }
+                    item { SettingsChoice(stringResource(R.string.files_manager), stringResource(R.string.files_title), { onPage(Page.FILES) }) }
                     item { SettingsChoice("Синхронизация Fit3 Health", "Проверка обмена данными здоровья",
                         { onPage(Page.HEALTH_SYNC) }) }
                     item { SettingsChoice("Журнал протокола", "Пакеты обмена, копирование и очистка",
@@ -1756,10 +1746,21 @@ private fun CompanionScreen(
                     item { FilledTonalButton(onClick = onSendTestNotification, enabled = snapshot.sapReady) {
                         Text("Отправить тест на браслет")
                     } }
-                    item { Text(snapshot.notificationStatus, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     item { SettingSwitch("Сохранять журнал для ADB", adbLogEnabled, onAdbLogEnabled) }
                     item { Text("В отладочной сборке журнал можно снять командой: adb shell run-as io.github.yuriyurin.fit3companion cat files/protocol-monitor.log. Файл может содержать данные здоровья; запись выключена по умолчанию и ограничена 4 МБ.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                Page.CONNECTION_STATE -> {
+                    item { FilledTonalButton(onClick = onRefresh, enabled = snapshot.sapReady) { Text("Обновить всё") } }
+                    item { OutlinedButton(onClick = onRequestHealth, enabled = snapshot.sapReady) { Text("Запрос Health") } }
+                    item { OutlinedButton(onClick = onRequestHealthCapabilityForDebug, enabled = snapshot.sapReady) {
+                        Text("Проверить обмен Health")
+                    } }
+                    item { Text(snapshot.status, style = MaterialTheme.typography.bodySmall) }
+                    item { Text("Канал данных: ${if (snapshot.sapReady) "готов" else "не готов"} · пакетов в памяти: ${snapshot.protocolLog.size}",
+                        style = MaterialTheme.typography.bodySmall) }
+                    item { Text("Health: ${snapshot.healthStatus}", style = MaterialTheme.typography.bodySmall) }
+                    item { Text(snapshot.notificationStatus, style = MaterialTheme.typography.bodySmall) }
                 }
                 Page.PROTOCOL_LOG -> {
                     item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1805,20 +1806,10 @@ private fun CompanionScreen(
                     item { Text("Данные Open-Meteo используются в Fit3 App в личных некоммерческих целях. Спасибо Open-Meteo и поставщикам погодных моделей за открытый прогноз.") }
                     item { Text("Географический поиск основан на данных GeoNames. Прогноз может отличаться от фактической погоды.") }
                 }
+                Page.FIT3UI -> { item { Fit3UiScreen(snapshot) } }
+                Page.FILES -> { item { FileManagerScreen(snapshot) } }
                 Page.FLASHER -> {
-                    item { Text("Выберите пакет с телефона, чтобы проверить его размер и SHA-256. Запись на часы в этой версии отключена: защищённый протокол передачи ещё не перенесён с ПК.") }
-                    item { Button(onClick = onChooseFirmware) { Text("Выбрать файл прошивки") } }
-                    if (firmwareFile != null) {
-                        item { Card { Column(Modifier.padding(16.dp)) {
-                            Text(firmwareFile.name, style = MaterialTheme.typography.titleMedium)
-                            if (firmwareFile.valid) {
-                                Text("Размер: ${firmwareFile.size} байт")
-                                Text("SHA-256: ${firmwareFile.sha256}", style = MaterialTheme.typography.bodySmall)
-                            } else Text(firmwareFile.sha256)
-                        } } }
-                    }
-                    item { Button(onClick = {}, enabled = false) { Text("Прошить часы — пока недоступно") } }
-                    item { Button(onClick = { onPage(Page.DEBUG) }) { Text("Назад к отладке") } }
+                    item { FirmwareScreen(snapshot, onChooseFirmware, onFlashFirmware) }
                 }
             }
             }
@@ -2809,7 +2800,7 @@ private fun SettingsChoice(title: String, subtitle: String, onClick: () -> Unit)
     Card(onClick = onClick) {
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (subtitle.isNotBlank()) Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

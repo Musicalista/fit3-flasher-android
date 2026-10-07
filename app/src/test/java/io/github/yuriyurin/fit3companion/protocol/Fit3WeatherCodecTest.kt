@@ -44,4 +44,28 @@ class Fit3WeatherCodecTest {
         assertEquals(1, Fit3WeatherCodec.requestKind(byteArrayOf(1, 0, 1)))
         assertEquals(null, Fit3WeatherCodec.requestKind(byteArrayOf(1, 0, 0)))
     }
+
+    @Test fun uvTextUsesSelectedLanguageAtEveryBoundary() {
+        val levels = listOf(0.0, 3.0, 6.0, 8.0, 11.0)
+        assertEquals(listOf("Low", "Moderate", "High", "Very high", "Extreme"),
+            levels.map { Fit3WeatherCodec.uvDescription(it, "en-US") })
+        assertEquals(listOf("Низкий", "Средний", "Высокий", "Очень высокий", "Экстремальный"),
+            levels.map { Fit3WeatherCodec.uvDescription(it, "ru") })
+        assertEquals("Low", Fit3WeatherCodec.uvDescription(1.0, "de"))
+        fun contains(bytes: ByteArray, text: String) = bytes.toList().windowed(text.toByteArray().size)
+            .any { it.toByteArray().contentEquals(text.toByteArray()) }
+        assertTrue(contains(Fit3WeatherCodec.response(sample, "ru"), "Низкий"))
+        assertTrue(contains(Fit3WeatherCodec.response(sample, "en"), "Low"))
+    }
+
+    @Test fun builtinCityTranslationPreservesIdentityAndCoordinates() {
+        val city = sample.city.copy(id = -1)
+        val english = city.localizedBuiltin("en")
+        assertEquals("Moscow", english.name)
+        assertEquals("Russia", english.country)
+        assertEquals(city.latitude, english.latitude, 0.0)
+        assertEquals(city.id, english.id)
+        assertEquals("Москва", english.localizedBuiltin("ru").name)
+        assertEquals("Москва", sample.city.localizedBuiltin("en").name) // External names are not guessed.
+    }
 }

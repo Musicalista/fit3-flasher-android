@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0b12
+
+### 🇷🇺 Добавлено
+
+- Прошивальщик браслета с проверкой файла, прогрессом установки и журналом. Работа подтверждена на реальном Galaxy Fit3.
+- Масштабная переработка режима отладки.
+
+### 🇷🇺 Исправлено
+
+- Перевод уровня ультрафиолета и обновление названий городов после смены языка.
+- Подключение при прошивке и обработка ошибок передачи.
+- Команды режимов «Сон» и «Театр» приведены в соответствие с официальным приложением. Отключение сна ещё требует проверки на затронутом устройстве.
+
+### 🇬🇧 Added
+
+- Firmware flasher with file validation, progress and logging. Operation confirmed on a real Galaxy Fit3.
+- Major debug mode redesign.
+
+### 🇬🇧 Fixed
+
+- UV level translation and city name updates after language changes.
+- Firmware connection sequence and transfer error handling.
+- Sleep and Theatre mode commands now match the official app. Sleep mode switching itself off still needs verification on the affected device.
+
+Firmware modifications are performed at your own risk. / Действия с прошивкой выполняются на ваш страх и риск.
+
 ## 0.7.0b3
 
 ## 🇷🇺 Русский

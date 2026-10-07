@@ -18,15 +18,15 @@ class Fit3HealthAcceptanceTest {
     }
 
     @Test fun storageFailureCannotReturnSuccessReplyOrChangePreviousState() {
-        val previous = Fit3HealthCodec.State(steps = 100, sleepMinutes = 420)
+        val previous = Fit3HealthCodec.State(steps = 215, sleepMinutes = 350)
         var returned = false
         try {
             Fit3HealthAcceptance.accept(previous, request, 10_000L) { _, _ -> error("Disk full") }
             returned = true
         } catch (_: IllegalStateException) { }
         assertFalse(returned)
-        assertEquals(100, previous.steps)
-        assertEquals(420, previous.sleepMinutes)
+        assertEquals(215, previous.steps)
+        assertEquals(350, previous.sleepMinutes)
         assertNull(previous.lastSuccessfulSyncMillis)
     }
 
@@ -42,9 +42,9 @@ class Fit3HealthAcceptanceTest {
     }
 
     @Test fun validExchangeWithoutNewMeasurementsStillAdvancesSyncTime() {
-        val before = Fit3HealthCodec.State(steps = 100, lastSyncMillis = 1L, lastSuccessfulSyncMillis = 2L)
+        val before = Fit3HealthCodec.State(steps = 215, lastSyncMillis = 1L, lastSuccessfulSyncMillis = 2L)
         val incoming = Fit3HealthAcceptance.accept(before, request, 10_000L) { _, _ -> }
-        assertEquals(100, incoming.state.steps)
+        assertEquals(215, incoming.state.steps)
         assertEquals(1L, incoming.state.lastSyncMillis)
         assertEquals(10_000L, incoming.state.lastSuccessfulSyncMillis)
     }

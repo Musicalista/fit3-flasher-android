@@ -1,0 +1,24 @@
+<resources>
+    <string name="flasher_warning">Все манипуляции с прошивкой вы проводите на свой страх и риск. Автор приложения не несёт ответственности за любые возможные неполадки и повреждения устройства.</string>
+    <string name="flasher_choose">Выбрать прошивку</string>
+    <string name="flasher_size">Размер: %1$d байт</string>
+    <string name="flasher_components">Компонентов: %1$d</string>
+    <string name="flasher_accept">Беру ответственность на себя</string>
+    <string name="flasher_flash">Прошить</string>
+    <string name="flasher_connect">Перед прошивкой подключите браслет.</string>
+    <string name="flasher_version_mismatch">Исходная версия пакета не совпадает с прошивкой браслета.</string>
+    <string name="flasher_battery">Зарядите браслет хотя бы до 30%.</string>
+    <string name="flasher_progress">Передача файла: %1$d%%</string>
+    <string name="flasher_wait">Команда обновления отправлена. Дождитесь завершения на браслете и проверьте версию прошивки. Не прерывайте обновление.</string>
+    <string name="flasher_log">Журнал</string>
+    <string name="flasher_log_empty">Операций пока нет.</string>
+    <string name="flasher_checking">Проверка пакета прошивки…</string>
+    <string name="flasher_verified">Структура пакета и контрольные суммы проверены.</string>
+    <string name="flasher_rejected">Прошивка отклонена: %1$s</string>
+    <string name="flasher_preparing">Подготовка передачи. Не выключайте Bluetooth и не закрывайте приложение.</string>
+    <string name="flasher_transferring">Передача блоков прошивки…</string>
+    <string name="flasher_size_check">Все блоки подтверждены. Проверяем размер сохранённого файла…</string>
+    <string name="flasher_command_sent">Команда обновления отправлена. Браслет может перезагрузиться. Завершение установки ещё не подтверждено.</string>
+    <string name="flasher_reconnect">После переподключения проверьте браслет и версию прошивки.</string>
+    <string name="flasher_uncertain">Доставка команды обновления не подтверждена. Проверьте браслет и не повторяйте прошивку сразу.</string>
+</resources>

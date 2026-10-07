@@ -1,0 +1,10 @@
+<resources>
+    <string name="error_report_title">Отчёт об ошибке</string>
+    <string name="error_report_subtitle">Работа приложения и вылеты без личных данных</string>
+    <string name="error_report_recording">Запись логов</string>
+    <string name="error_report_save">Сохранить</string>
+    <string name="error_report_saved">Отчёт сохранён</string>
+    <string name="error_report_save_failed">Не удалось сохранить отчёт. Попробуйте другую папку.</string>
+    <string name="error_report_privacy">Запись по умолчанию выключена. Отчёт содержит события работы приложения и места ошибок, но не уведомления, данные здоровья, адреса устройств, пакеты или тексты ошибок. Он хранится только в памяти приложения и никуда не отправляется автоматически. При сохранении можно выбрать папку для копии.</string>
+    <string name="error_report_limits">Включите запись перед повторением проблемы. Выключение останавливает новые записи; ранее записанные события остаются доступны. Некоторые системные завершения приложения записать невозможно.</string>
+</resources>

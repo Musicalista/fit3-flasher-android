@@ -1,0 +1,29 @@
+<resources>
+    <string name="files_console_unavailable">This firmware blocks file listing and deletion. Install the Fit3Files user-bin patch. Upload and download by name remain available.</string>
+    <string name="files_download_by_name">Download by name</string>
+    <string name="files_manager">File manager</string>
+    <string name="files_delete_question">Delete %1$s?</string>
+    <string name="files_bytes">%1$d B</string>
+    <string name="files_title">Watch files</string>
+    <string name="files_help">Upload and download up to 16 MiB. Write access is available in /user. Only empty folders can be deleted.</string>
+    <string name="files_folder">Folder</string>
+    <string name="files_up">Up</string>
+    <string name="files_refresh">Refresh</string>
+    <string name="files_upload">Upload</string>
+    <string name="files_new_folder">New folder</string>
+    <string name="files_connect">Connect your watch</string>
+    <string name="files_cancel">Cancel</string>
+    <string name="files_open">Open</string>
+    <string name="files_download">Download</string>
+    <string name="files_delete">Delete</string>
+    <string name="files_create_folder">Create folder</string>
+    <string name="files_upload_file">Upload file</string>
+    <string name="files_name">Name on watch</string>
+    <string name="files_create">Create</string>
+    <string name="files_overwrite">An existing file with this name will be overwritten.</string>
+    <string name="files_choose_refresh">Tap Refresh to open this folder</string>
+    <string name="files_working">Working…</string>
+    <string name="files_verifying">Verifying uploaded file…</string>
+    <string name="files_done">Done</string>
+    <string name="files_cancelled">Cancelled. An upload may have left a partially written file.</string>
+</resources>

@@ -21,8 +21,10 @@ import java.io.File
 
 /** Runs solely in a unique test directory/pref namespace, never in the user's Health database. */
 class HealthStorageSmoke : Instrumentation() {
+    private var recoverInstalledPreview = false
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        recoverInstalledPreview = arguments?.getString("recover_installed_preview") == "true"
         start()
     }
     override fun onStart() {
@@ -66,7 +68,7 @@ class HealthStorageSmoke : Instrumentation() {
             if (customSample.exists()) {
                 val bytes = customSample.readBytes()
                 val library = CustomFaceLibrary(sandbox)
-                val face = library.add(bytes, "test-face.bin")
+                val face = library.add(bytes, "SM-R390_00080_256x402 (3).bin")
                 check(face.faceId == 80 && face.styles == listOf(0))
                 check(library.list().size == 1)
                 check(library.add(bytes, "duplicate.bin").key == face.key)
@@ -114,28 +116,40 @@ class HealthStorageSmoke : Instrumentation() {
                 check(reopened.preview(face.key, 0) == null)
                 check(customSample.exists()) // User's source is never removed.
                 customResult = "PASS: custom BIN import, durable independent PNG/name after deletion, migration, sampler isolation and corrupt preview handling\n"
+                // Explicitly requested debug-only repair of a b32 preview whose BIN was already deleted.
+                // No BIN is imported into the production library and no Bluetooth command is sent.
+                if (recoverInstalledPreview) {
+                    check(face.key == "40fe5ae78c23e4da7c2bedc307043fffc96b3f50326020c05c2fd5c072041c97")
+                    check(io.github.yuriyurin.fit3companion.ble.InstalledFaceSources(targetContext).hasSource(face.key))
+                    val before = CustomFaceLibrary(targetContext).list()
+                    val productionPreviews = InstalledFacePreviewStore(targetContext)
+                    productionPreviews.prepare(bytes, face.key, "SM-R390_00080_256x402 (3)", listOf(0))
+                    check(productionPreviews.preview(face.key, 0)!!.sameAs(expectedPixels))
+                    check(CustomFaceLibrary(targetContext).list() == before)
+                    customResult += "PASS: existing confirmed cat preview repaired without importing BIN or contacting watch\n"
+                }
+            } else {
+                check(!recoverInstalledPreview) { "Missing preview repair sample" }
             }
-            // Fixed synthetic timestamps and values, unrelated to a user's device history.
-            val testTime = java.time.Instant.parse("2020-01-02T10:00:00Z").toEpochMilli()
-            val old = Fit3HealthCodec.State(steps = 100, sleepMinutes = 420,
-                spo2 = 96, spo2At = testTime, lastSyncMillis = testTime)
+            val old = Fit3HealthCodec.State(steps = 215, sleepMinutes = 350,
+                spo2 = 97, spo2At = 1790736668000L, lastSyncMillis = 1790736668000L)
             val legacy = Fit3HealthStore.encode(old).put("version", 1)
             File(sandbox.filesDir, "health-cache-v1.json").writeText(legacy.toString())
-            check(Fit3HealthStore.load(sandbox).sleepMinutes == 420)
+            check(Fit3HealthStore.load(sandbox).sleepMinutes == 350)
 
             // b26: sender association and minute bins survive export/import onto a phone.
             val owned = old.copy(stepSourceAddress = "AA:BB:CC:DD:EE:FF",
-                stepRecords = mapOf(testTime to Fit3HealthCodec.StepRecord(10, 10, 0, 5.0, .5, 10000)))
+                stepRecords = mapOf(1790776920000L to Fit3HealthCodec.StepRecord(18, 18, 0, 12.6, .54, 12000)))
             val decoded = Fit3HealthStore.decode(Fit3HealthStore.encode(owned))
             check(decoded.stepSourceAddress == owned.stepSourceAddress)
             check(decoded.stepRecords == owned.stepRecords)
 
             val raw = byteArrayOf(0x82.toByte(), 1, 0xE0.toByte(), 0x28, 0x27)
-            val next = old.copy(steps = 103, lastSuccessfulSyncMillis = testTime + 10000)
-            Fit3HealthStore.accept(sandbox, "test-watch", next, raw, testTime + 10000)
-            Fit3HealthStore.accept(sandbox, "test-watch", next, raw, testTime + 11000)
-            check(Fit3HealthStore.load(sandbox).steps == 103)
-            check(Fit3HealthStore.load(sandbox).sleepMinutes == 420)
+            val next = old.copy(steps = 218, lastSuccessfulSyncMillis = 1790736678000L)
+            Fit3HealthStore.accept(sandbox, "test-watch", next, raw, 1790736678000L)
+            Fit3HealthStore.accept(sandbox, "test-watch", next, raw, 1790736679000L)
+            check(Fit3HealthStore.load(sandbox).steps == 218)
+            check(Fit3HealthStore.load(sandbox).sleepMinutes == 350)
             val exported = Fit3HealthStore.export(sandbox, next)
             check(exported.getJSONArray("packetArchive").length() == 1)
 
@@ -146,9 +160,9 @@ class HealthStorageSmoke : Instrumentation() {
             }
             var failed = false
             try { Fit3HealthStore.accept(sandbox, "test-watch", next.copy(steps = 999),
-                raw + byteArrayOf(7), testTime + 12000) } catch (_: Exception) { failed = true }
+                raw + byteArrayOf(7), 1790736680000L) } catch (_: Exception) { failed = true }
             check(failed)
-            check(Fit3HealthStore.load(sandbox).steps == 103)
+            check(Fit3HealthStore.load(sandbox).steps == 218)
             check(Fit3HealthStore.export(sandbox, next).getJSONArray("packetArchive").length() == 1)
             SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
                 db.execSQL("DROP TRIGGER fail_snapshot")
@@ -175,7 +189,7 @@ class HealthStorageSmoke : Instrumentation() {
                 Fit3ActivityGoalCodec.Observation(124, 650, changedGoals.revision + 1000),
                 Fit3ActivityGoalCodec.Observation(125, 120, changedGoals.revision + 1000)))
             check(Fit3ActivityGoalStore.load(sandbox).goals == goals)
-            check(Fit3HealthStore.load(sandbox).steps == 103) // Goals never become measured steps.
+            check(Fit3HealthStore.load(sandbox).steps == 218) // Goals never become measured steps.
             val backup = Fit3BackupStore.exportJson(sandbox, BleSnapshot(health = next))
             val goalJson = JSONObject(backup).getJSONObject("preferences").getJSONObject("activityGoals")
             check(goalJson.getInt("steps") == 7500 && goalJson.getInt("minutes") == 120 && goalJson.getInt("calories") == 650)
@@ -188,7 +202,7 @@ class HealthStorageSmoke : Instrumentation() {
             }
             check(!Fit3BackupStore.importJson(sandbox, invalidGoals.toString()))
             check(Fit3ActivityGoalStore.load(sandbox).goals == goals)
-            check(Fit3HealthStore.load(sandbox).steps == 103)
+            check(Fit3HealthStore.load(sandbox).steps == 218)
             val withLanguage = JSONObject(backup).apply {
                 getJSONObject("preferences").put("language", "en")
             }
@@ -203,12 +217,26 @@ class HealthStorageSmoke : Instrumentation() {
             check(Fit3BackupStore.importJson(sandbox, backup))
             check(Fit3BackupStore.importJson(sandbox, backup))
             check(Fit3HealthStore.export(sandbox, next).getJSONArray("packetArchive").length() == 1)
-            check(Fit3HealthStore.load(sandbox).sleepMinutes == 420)
+            check(Fit3HealthStore.load(sandbox).sleepMinutes == 350)
             val malformed = JSONObject(exported.toString())
             malformed.getJSONArray("packetArchive").getJSONObject(0).put("received", -1)
             failed = false
             try { Fit3HealthStore.import(sandbox, malformed) } catch (_: Exception) { failed = true }
-            check(failed && Fit3HealthStore.load(sandbox).steps == 103)
+            check(failed && Fit3HealthStore.load(sandbox).steps == 218)
+            val sleepStart = java.time.Instant.parse("2026-10-02T23:00:00Z").toEpochMilli()
+            val sleepEnd = sleepStart + 8 * 3600000L
+            val sleepState = next.copy(
+                sleepEpisodes = listOf(io.github.yuriyurin.fit3companion.protocol.Fit3Sleep.Episode("test-sleep", sleepStart, sleepEnd)),
+                sleepStages = listOf(io.github.yuriyurin.fit3companion.protocol.Fit3Sleep.Stage("test-sleep", sleepStart, sleepEnd, 40002)))
+            val sleepDecoded = Fit3HealthStore.decode(Fit3HealthStore.encode(sleepState))
+            check(sleepDecoded.sleepEpisodes == sleepState.sleepEpisodes)
+            check(sleepDecoded.sleepStages == sleepState.sleepStages)
+            Fit3HealthStore.save(sandbox, sleepState)
+            check(Fit3HealthStore.load(sandbox).sleepEpisodes == sleepState.sleepEpisodes)
+            val sleepBackup = Fit3HealthStore.export(sandbox, sleepState)
+            Fit3HealthStore.import(sandbox, sleepBackup)
+            Fit3HealthStore.import(sandbox, sleepBackup)
+            check(Fit3HealthStore.load(sandbox).sleepStages.size == 1)
             result.putString("stream", languageResult + customResult + "PASS: durable watchface source, device/sampler isolation, version change, official replacement and deletion\n" + "PASS: legacy migration, durable packet+snapshot, deduplication, rollback, JSON backup, repeated restore, durable goals and stale-ACK protection\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {

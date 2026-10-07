@@ -1,0 +1,10 @@
+<resources>
+    <string name="error_report_title">Error report</string>
+    <string name="error_report_subtitle">App events and crashes, without personal data</string>
+    <string name="error_report_recording">Record logs</string>
+    <string name="error_report_save">Save</string>
+    <string name="error_report_saved">Report saved</string>
+    <string name="error_report_save_failed">Could not save the report. Try another folder.</string>
+    <string name="error_report_privacy">Recording is off by default. The report contains app events and error locations, but no notifications, health data, device addresses, packets or error messages. It is stored privately on your phone and is never sent automatically. Save lets you choose a folder for a copy.</string>
+    <string name="error_report_limits">Enable recording before reproducing a problem. Turning it off stops new entries; previously recorded entries remain available. Some system terminations cannot be captured.</string>
+</resources>

@@ -46,6 +46,8 @@ class Fit3SettingsCodecTest {
         assertEquals(0, state.vibrationIntensity)
         assertFalse(state.rightWrist == true)
         assertTrue(state.buttonOnRight == true)
+        assertTrue(state.syncSleepMode == true)
+        assertEquals(null, state.sleepMode)
     }
 
     @Test
@@ -75,5 +77,16 @@ class Fit3SettingsCodecTest {
             byteArrayOf(0x0A, 0x14, 0x01)))
         assertTrue(Fit3SettingsCodec.setButtonOnRight(false).contentEquals(
             byteArrayOf(0x0A, 0x15, 0x00)))
+    }
+
+    @Test fun modeStateWritesMatchOfficialSamsungConstructors() {
+        for (enabled in listOf(false, true)) {
+            val value = if (enabled) 1.toByte() else 0.toByte()
+            assertTrue(Fit3SettingsCodec.setSleepMode(enabled).contentEquals(byteArrayOf(0x4B, 0x16, value)))
+            assertTrue(Fit3SettingsCodec.setTheatreMode(enabled).contentEquals(byteArrayOf(0x4D, 0x1B, value)))
+            val state = Fit3SettingsCodec.merge(Fit3SettingsCodec.State(), Fit3SettingsCodec.setSleepMode(enabled))
+            assertEquals(enabled, state.sleepMode)
+        }
+        assertTrue(Fit3SettingsCodec.sleepModeRequest.contentEquals(byteArrayOf(0x0B)))
     }
 }

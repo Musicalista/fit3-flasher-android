@@ -75,6 +75,7 @@ object AppStrings {
 class Fit3Application : Application() {
     override fun onCreate() {
         super.onCreate()
+        ErrorReport.initialize(this)
         AppStrings.initialize(this)
     }
 

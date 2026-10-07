@@ -64,6 +64,8 @@ enum class SetupStage { IDLE, WAIT_INFO, WAIT_DEVICE, WAIT_SETTINGS, WAIT_AGREEM
 enum class GoalSyncState { LOCAL, PENDING, SENDING, SYNCED, FAILED }
 
 data class BleSnapshot(
+    val firmwareFlash: FirmwareFlashState = FirmwareFlashState(),
+    val bandFiles: BandFileState = BandFileState(),
     val status: String = "Не подключено",
     val connected: Boolean = false,
     val scanning: Boolean = false,
@@ -214,7 +216,18 @@ class Fit3BleClient(
     private var currentWrite: QueuedWrite? = null
     private var writeToken = 0
 
+    private var reportedConnected = false
+    private var reportedReady = false
     private fun publish(status: String = snapshot.status) {
+        if (snapshot.connected != reportedConnected) {
+            io.github.yuriyurin.fit3companion.ErrorReport.record(if (snapshot.connected)
+                io.github.yuriyurin.fit3companion.ErrorReport.Event.LINK_CONNECTED
+                else io.github.yuriyurin.fit3companion.ErrorReport.Event.LINK_DISCONNECTED)
+            reportedConnected = snapshot.connected
+        }
+        if (snapshot.sapReady && !reportedReady)
+            io.github.yuriyurin.fit3companion.ErrorReport.record(io.github.yuriyurin.fit3companion.ErrorReport.Event.CHANNEL_READY)
+        reportedReady = snapshot.sapReady
         snapshot = snapshot.copy(status = status, devices = discovered.values.toList(), scanning = scanActive)
         onUpdate(snapshot)
     }
@@ -328,6 +341,7 @@ class Fit3BleClient(
     }
 
     fun connect(address: String) {
+        if (firmwareSession != null || fileSession != null) return
         stopScan()
         disconnect(updateStatus = false)
         lastAddress = address
@@ -390,6 +404,8 @@ class Fit3BleClient(
                     gatt = null
                     link.close()
                     snapshot = snapshot.copy(connected = false, sapReady = false, refreshing = false)
+                    firmwarePermission?.completeExceptionally(java.io.IOException("Band disconnected during OTA preparation"))
+                    filePermission?.completeExceptionally(java.io.IOException("Band disconnected"))
                     publish(if (status == BluetoothGatt.GATT_SUCCESS) "Связь прервана" else "Ошибка связи: $status")
                     scheduleReconnect()
                 } else if (status != BluetoothGatt.GATT_SUCCESS) fail("Ошибка подключения: $status")
@@ -685,6 +701,20 @@ class Fit3BleClient(
                         else -> handleMediaRequest(message)
                     }
                 } else if (serviceId == Fit3SapCodec.SERVICE_OTA_TRANSFER) {
+                    if (fileSession != null) {
+                        fileSession?.receive(message)?.let { accepted ->
+                            if (accepted) filePermission?.complete(Unit)
+                            else filePermission?.completeExceptionally(java.io.IOException("Watch rejected file channel"))
+                        }
+                        return@post
+                    }
+                    if (firmwareSession != null) {
+                        val action = firmwareSession?.receive(message)
+                        action?.request?.let { writeFirmwareControl(it) }
+                        if (action?.ready == true) firmwarePermission?.complete(Unit)
+                        action?.error?.let { firmwarePermission?.completeExceptionally(java.io.IOException(it)) }
+                        return@post
+                    }
                     val accepted = Fit3MediaFileCodec.acceptedFileInfo(message)
                     if (accepted != null && mediaFileInFlight != null) {
                         if (accepted) requestMediaBluetoothOpen() else finishMediaFileTransfer(false)
@@ -902,10 +932,72 @@ class Fit3BleClient(
 
     fun sendWeather(forecast: WeatherForecast) {
         if (!snapshot.sapReady) return
-        sendReadOnly(Fit3SapCodec.SERVICE_WEATHER, Fit3WeatherCodec.response(forecast))
+        val selection = io.github.yuriyurin.fit3companion.BandLanguage.selection(context)
+        val language = if (selection == io.github.yuriyurin.fit3companion.protocol.Fit3Languages.APP)
+            io.github.yuriyurin.fit3companion.AppLanguage.locale(context).language else selection
+        sendReadOnly(Fit3SapCodec.SERVICE_WEATHER, Fit3WeatherCodec.response(forecast, language))
+    }
+
+    private var fileSession: io.github.yuriyurin.fit3companion.protocol.Fit3FileSession? = null
+    private var filePermission: java.util.concurrent.CompletableFuture<Unit>? = null
+    fun prepareFileTransfer(): java.util.concurrent.CompletableFuture<Unit> {
+        check(snapshot.sapReady && setupStage in listOf(SetupStage.IDLE, SetupStage.COMPLETE) && firmwareSession == null && fileSession == null &&
+            mediaFileInFlight == null && !snapshot.faceInstallPending && !snapshot.faceChangePending) {
+            "Wait for connection and other transfers"
+        }
+        cancelMediaTransfers()
+        val session = io.github.yuriyurin.fit3companion.protocol.Fit3FileSession()
+        val permission = java.util.concurrent.CompletableFuture<Unit>()
+        fileSession = session; filePermission = permission
+        writeFirmwareControl(session.begin())
+        main.postDelayed({ if (fileSession === session && !permission.isDone)
+            permission.completeExceptionally(java.io.IOException("File channel timeout")) }, 25_000)
+        return permission
+    }
+    fun releaseFileTransfer() {
+        if (fileSession == null) return
+        filePermission?.completeExceptionally(java.io.IOException("File channel closed"))
+        if (snapshot.sapReady) writeFirmwareControl(byteArrayOf(3))
+        fileSession = null; filePermission = null
+    }
+    private var firmwareSession: io.github.yuriyurin.fit3companion.protocol.Fit3FirmwareSession? = null
+    private var firmwarePermission: java.util.concurrent.CompletableFuture<Unit>? = null
+
+    fun prepareFirmwareTransfer(name: String, size: Int): java.util.concurrent.CompletableFuture<Unit> {
+        val permission = java.util.concurrent.CompletableFuture<Unit>()
+        if (!snapshot.sapReady || firmwareSession != null || fileSession != null || mediaFileInFlight != null || snapshot.faceInstallPending) {
+            permission.completeExceptionally(IllegalStateException("Wait for the current transfer to finish"))
+            return permission
+        }
+        cancelMediaTransfers()
+        val session = io.github.yuriyurin.fit3companion.protocol.Fit3FirmwareSession()
+        firmwareSession = session
+        firmwarePermission = permission
+        writeFirmwareControl(session.begin(name, size))
+        main.postDelayed({
+            if (firmwareSession === session && !permission.isDone) {
+                session.fail()
+                permission.completeExceptionally(java.io.IOException("Band did not confirm OTA channel within 25 seconds"))
+            }
+        }, 25_000)
+        return permission
+    }
+
+    private fun writeFirmwareControl(message: ByteArray) {
+        protocolLog("TX", Fit3SapCodec.SERVICE_OTA_TRANSFER, message)
+        Fit3SapCodec.encodeMessage(Fit3SapCodec.SERVICE_OTA_TRANSFER, message, transportMtu).forEach { writeRaw(it) }
+    }
+
+    fun releaseFirmwareTransfer() {
+        if (firmwareSession == null) return
+        firmwarePermission?.completeExceptionally(java.io.IOException("OTA channel closed"))
+        if (snapshot.sapReady) writeFirmwareControl(byteArrayOf(3))
+        firmwareSession = null
+        firmwarePermission = null
     }
 
     private fun writeMessage(serviceId: Int, message: ByteArray, onSent: (() -> Unit)? = null) {
+        if (firmwareSession != null || fileSession != null) return
         val frames = Fit3SapCodec.encodeMessage(serviceId, message, transportMtu)
         frames.forEachIndexed { index, bytes ->
             writeRaw(bytes, onSent.takeIf { index == frames.lastIndex })
@@ -919,6 +1011,7 @@ class Fit3BleClient(
 
     /** Keep the watch in step with Android players without requiring the music screen to be reopened. */
     fun syncMediaIfChanged() {
+        if (firmwareSession != null || fileSession != null) return
         if (!snapshot.sapReady || setupStage !in listOf(SetupStage.IDLE, SetupStage.COMPLETE)) return
         val (state, artwork) = mediaBridge.currentMedia()
         currentArtworkName = artwork?.name
@@ -1998,6 +2091,7 @@ class Fit3BleClient(
 
     /** Refreshes all currently supported read-only data without resetting the watch. */
     fun refresh(manual: Boolean = true) {
+        if (firmwareSession != null || fileSession != null) return
         if (manual && goalSequence == null) goalAttempts = 0
         if (!snapshot.connected || !snapshot.sapReady || setupStage !in
             listOf(SetupStage.IDLE, SetupStage.COMPLETE)) {
@@ -2137,6 +2231,7 @@ class Fit3BleClient(
     }
 
     private fun fail(message: String) {
+        io.github.yuriyurin.fit3companion.ErrorReport.record(io.github.yuriyurin.fit3companion.ErrorReport.Event.CONNECTION_FAILED)
         setupStage = SetupStage.IDLE
         snapshot = snapshot.copy(connected = false, sapReady = false, setupStage = SetupStage.IDLE,
             refreshing = false)
@@ -2146,6 +2241,7 @@ class Fit3BleClient(
     }
 
     private fun scheduleReconnect() {
+        if (firmwareSession != null || fileSession != null) return
         val address = lastAddress ?: return
         if (reconnectScheduled) return
         reconnectScheduled = true
@@ -2162,6 +2258,8 @@ class Fit3BleClient(
     }
 
     fun disconnect() = disconnect(updateStatus = true)
+
+    fun connectedFirmwareAddress(): String? = lastAddress.takeIf { snapshot.connected && snapshot.sapReady }
 
     private fun disconnect(updateStatus: Boolean) {
         generation++

@@ -12,9 +12,9 @@ android {
         applicationId = "io.github.yuriyurin.fit3companion"
         minSdk = 29
         targetSdk = 35
-        versionCode = 74
-        versionName = "0.7.0b3"
-        testInstrumentationRunner = "io.github.yuriyurin.fit3companion.HealthStorageSmoke"
+        versionCode = 83
+        versionName = "0.7.0b12"
+        testInstrumentationRunner = providers.gradleProperty("fit3TestRunner").getOrElse("io.github.yuriyurin.fit3companion.HealthStorageSmoke")
     }
 
     compileOptions {
@@ -22,7 +22,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 dependencies {

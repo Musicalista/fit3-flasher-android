@@ -32,7 +32,7 @@ object Fit3WeatherCodec {
         else -> 2
     }
 
-    fun response(forecast: WeatherForecast): ByteArray {
+    fun response(forecast: WeatherForecast, language: String = "en"): ByteArray {
         val out = ByteArrayOutputStream()
         var params = 0
         fun one(id: Int, value: Int) { out.write(id); out.write(value and 0xff); params++ }
@@ -95,13 +95,7 @@ object Fit3WeatherCodec {
         // Air quality is unavailable in this forecast; keep optional AQI fields empty.
         for (id in 44..49) word(id, 0)
         word(50, forecast.uvIndex.roundToInt())
-        text(51, when {
-            forecast.uvIndex < 3 -> "Низкий"
-            forecast.uvIndex < 6 -> "Средний"
-            forecast.uvIndex < 8 -> "Высокий"
-            forecast.uvIndex < 11 -> "Очень высокий"
-            else -> "Экстремальный"
-        })
+        text(51, uvDescription(forecast.uvIndex, language))
         word(52, forecast.windKmh.roundToInt())
         text(53, "") // wind text
         word(54, forecast.humidity.coerceIn(0, 100))
@@ -110,5 +104,13 @@ object Fit3WeatherCodec {
         result[1] = ((params ushr 8) and 0xff).toByte()
         result[2] = (params and 0xff).toByte()
         return result
+    }
+
+    fun uvDescription(index: Double, language: String): String {
+        val level = when { index < 3 -> 0; index < 6 -> 1; index < 8 -> 2; index < 11 -> 3; else -> 4 }
+        val labels = if (language.substringBefore('-') == "ru")
+            listOf("Низкий", "Средний", "Высокий", "Очень высокий", "Экстремальный")
+        else listOf("Low", "Moderate", "High", "Very high", "Extreme")
+        return labels[level]
     }
 }

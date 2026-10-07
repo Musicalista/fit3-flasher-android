@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class Fit3VitalCodecTest {
-    private val now = Instant.parse("2020-01-02T08:00:00Z").toEpochMilli()
+    private val now = Instant.parse("2026-09-27T08:00:00Z").toEpochMilli()
 
     private fun le4(value: Int) = byteArrayOf(value.toByte(), (value ushr 8).toByte(),
         (value ushr 16).toByte(), (value ushr 24).toByte())

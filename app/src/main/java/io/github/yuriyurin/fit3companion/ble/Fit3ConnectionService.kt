@@ -35,6 +35,10 @@ class Fit3ConnectionService : Service() {
     private val binder = LocalBinder()
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var ble: Fit3BleClient
+    private lateinit var firmwareFlasher: FirmwareFlasher
+    private lateinit var fileManager: BandFileManager
+    private var fileState = BandFileState()
+    private var firmwareState = FirmwareFlashState()
     private var snapshot = BleSnapshot()
     private var listener: ((BleSnapshot) -> Unit)? = null
     private var foreground = false
@@ -114,7 +118,16 @@ class Fit3ConnectionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        io.github.yuriyurin.fit3companion.ErrorReport.record(io.github.yuriyurin.fit3companion.ErrorReport.Event.SERVICE_STARTED)
         active = this
+        firmwareFlasher = FirmwareFlasher(this) { state ->
+            firmwareState = state
+            snapshot = snapshot.copy(firmwareFlash = state)
+            listener?.invoke(snapshot)
+        }
+        fileManager = BandFileManager(this) { value ->
+            fileState = value; snapshot = snapshot.copy(bandFiles = value); listener?.invoke(snapshot)
+        }
         weatherRepository = Fit3WeatherRepository(this)
         weatherForecast = weatherRepository.cachedForecast()
         weatherStatus = if (weatherRepository.selectedCity() == null) "Выберите город" else
@@ -141,7 +154,8 @@ class Fit3ConnectionService : Service() {
         var wasReadyForSettings = false
         var wasReadyForNotifications = false
         ble = Fit3BleClient(applicationContext, onUpdate = { current ->
-            snapshot = current.copy(weather = weatherForecast, weatherStatus = weatherStatus,
+            if (!current.connected) firmwareFlasher.onBandDisconnected()
+            snapshot = current.copy(firmwareFlash = firmwareState, bandFiles = fileState, weather = weatherForecast, weatherStatus = weatherStatus,
                 weatherLocationRequested = weatherLocationRequested)
             val pending = if (adbLogEnabled) current.protocolLog.takeWhile { it != lastProtocolEntry }
                 .asReversed() else emptyList()
@@ -226,6 +240,7 @@ class Fit3ConnectionService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (firmwareFlasher.busy || fileManager.busy) return START_NOT_STICKY
         val address = if (intent?.action == ACTION_CONNECT)
             intent.getStringExtra(ADDRESS) else getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getString(ADDRESS, null)
@@ -276,6 +291,22 @@ class Fit3ConnectionService : Service() {
         callback?.invoke(snapshot)
     }
 
+    fun fileOperation(folder: String, operation: String = "list", path: String? = null, uri: Uri? = null, entry: BandFileEntry? = null) {
+        if (firmwareFlasher.busy) return
+        fileManager.run(folder, ble.connectedFirmwareAddress(), { ble.prepareFileTransfer() },
+            { ble.releaseFileTransfer() }, operation, path, uri, entry)
+    }
+    fun cancelFileOperation() = fileManager.cancel()
+    fun chooseFirmware(uri: Uri) = firmwareFlasher.choose(uri)
+
+    fun flashFirmware(accepted: Boolean) {
+        if (fileManager.busy) return
+        val address = ble.connectedFirmwareAddress()
+        firmwareFlasher.flash(snapshot, address, accepted,
+            prepare = { name, size -> ble.prepareFirmwareTransfer(name, size) },
+            finish = { ble.releaseFirmwareTransfer() }, reconnect = { ble.connect(it) })
+    }
+
     private fun publishWeather() {
         snapshot = snapshot.copy(weather = weatherForecast, weatherStatus = weatherStatus,
             weatherLocationRequested = weatherLocationRequested)
@@ -309,16 +340,21 @@ class Fit3ConnectionService : Service() {
     fun refreshWeatherIfNeeded(force: Boolean = false) {
         val city = weatherRepository.selectedCity() ?: return
         if (weatherBusy) return
-        if (!force && weatherForecast != null &&
+        if (!force && weatherForecast != null && weatherForecast!!.city.language == io.github.yuriyurin.fit3companion.AppLanguage.locale(this).language &&
             System.currentTimeMillis() - weatherForecast!!.updatedAt < 60 * 60_000L) {
             return
         }
         weatherBusy = true
+        val requestedLanguage = io.github.yuriyurin.fit3companion.AppLanguage.locale(this).language
         weatherWorker.execute {
             val outcome = runCatching { weatherRepository.forecast(city) }
             handler.post {
                 weatherBusy = false
                 if (weatherRepository.selectedCity()?.id != city.id) return@post
+                if (requestedLanguage != io.github.yuriyurin.fit3companion.AppLanguage.locale(this).language) {
+                    refreshWeatherIfNeeded(force = true)
+                    return@post
+                }
                 outcome.onSuccess { fresh ->
                     weatherRepository.save(fresh)
                     weatherForecast = fresh
@@ -400,7 +436,11 @@ class Fit3ConnectionService : Service() {
     fun setQuickPanel(ids: List<Int>) = ble.setQuickPanel(ids)
     fun setQuickMessages(messages: List<String>) = ble.setQuickMessages(messages)
     fun syncTime() = ble.syncTime()
-    fun syncBandLanguage() = ble.syncBandLanguage()
+    fun syncBandLanguage() {
+        ble.syncBandLanguage()
+        weatherForecast?.let(ble::sendWeather)
+        refreshWeatherIfNeeded(force = true)
+    }
     fun clearProtocolLog() {
         ble.clearProtocolLog()
         diagnosticWriter.execute { java.io.File(filesDir, "protocol-monitor.log").writeText("") }
@@ -432,6 +472,7 @@ class Fit3ConnectionService : Service() {
     fun clearForwardedNotifications() = handler.post { ble.clearForwardedNotifications() }
 
     fun disconnectWatch() {
+        if (firmwareFlasher.busy || fileManager.busy) return
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(ADDRESS).apply()
         ble.disconnect()
         if (foreground) { stopForeground(STOP_FOREGROUND_REMOVE); foreground = false }
@@ -439,6 +480,9 @@ class Fit3ConnectionService : Service() {
     }
 
     override fun onDestroy() {
+        fileManager.close()
+        firmwareFlasher.close()
+        io.github.yuriyurin.fit3companion.ErrorReport.record(io.github.yuriyurin.fit3companion.ErrorReport.Event.SERVICE_STOPPED)
         if (active === this) active = null
         handler.removeCallbacks(refresh)
         handler.removeCallbacks(mediaRefresh)

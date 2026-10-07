@@ -124,7 +124,7 @@ class Fit3HealthCodecTest {
     }
 
     @Test fun retainsConfirmedMinimalAcknowledgmentsWithoutReflectingWearableDeviceIdentity() {
-        val device = Fit3HealthCodec.requestData(10001, 1_577_959_200_000L).copyOfRange(4, 31)
+        val device = Fit3HealthCodec.requestData(10001, 1790736668000L).copyOfRange(4, 31)
         val sync = byteArrayOf(0x82.toByte(), 2, 0xE0.toByte(), 0x28, 0x27) + device
         val reply = requireNotNull(Fit3HealthCodec.handle(Fit3HealthCodec.State(), sync).reply)
         assertEquals(9, reply.size)

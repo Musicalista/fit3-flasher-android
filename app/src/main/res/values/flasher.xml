@@ -1,0 +1,24 @@
+<resources>
+    <string name="flasher_warning">All firmware operations are performed at your own risk. The app author is not responsible for any resulting malfunctions or damage.</string>
+    <string name="flasher_choose">Choose firmware</string>
+    <string name="flasher_size">Size: %1$d bytes</string>
+    <string name="flasher_components">Components: %1$d</string>
+    <string name="flasher_accept">I accept responsibility</string>
+    <string name="flasher_flash">Flash</string>
+    <string name="flasher_connect">Connect the band before flashing.</string>
+    <string name="flasher_version_mismatch">The package source version does not match the band firmware.</string>
+    <string name="flasher_battery">Charge the band to at least 30%.</string>
+    <string name="flasher_progress">File transfer: %1$d%%</string>
+    <string name="flasher_wait">Update command sent. Wait for the band to finish and check its firmware version. Do not interrupt the update.</string>
+    <string name="flasher_log">Log</string>
+    <string name="flasher_log_empty">No operations yet.</string>
+    <string name="flasher_checking">Checking firmware package…</string>
+    <string name="flasher_verified">Package structure and checksums verified.</string>
+    <string name="flasher_rejected">Firmware rejected: %1$s</string>
+    <string name="flasher_preparing">Preparing transfer. Do not turn off Bluetooth or close the app.</string>
+    <string name="flasher_transferring">Transferring firmware blocks…</string>
+    <string name="flasher_size_check">All blocks acknowledged. Checking the stored file size…</string>
+    <string name="flasher_command_sent">Update command sent. The band may reboot. Installation completion is not yet confirmed.</string>
+    <string name="flasher_reconnect">Check the band and its firmware version after reconnecting.</string>
+    <string name="flasher_uncertain">Update command delivery is uncertain. Check the band; do not retry immediately.</string>
+</resources>

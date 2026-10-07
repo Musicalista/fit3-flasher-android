@@ -70,20 +70,20 @@ class TextLocalizerTest {
             localizer.translate("Канал данных: готов · пакетов в памяти: 42"))
         assertEquals("Could not restore: Invalid backup format",
             localizer.translate("Не удалось восстановить: Неверный формат копии"))
-        assertEquals("Steps: 1234 (partial total)",
-            localizer.translate("Шаги: 1234 (неполная сумма)"))
+        assertEquals("Steps: 1173 (partial total)",
+            localizer.translate("Шаги: 1173 (неполная сумма)"))
         assertEquals("Battery 39% · charging", localizer.translate("Заряд 39% · зарядка"))
     }
 
     @Test fun externalContentAndWireDataStayUnchanged() {
-        listOf("Москва", "Nekogram", "Dynamic digital", "Тестовый контакт: привет!", "87 E0 11 27",
-            "com.spotify.music", "SM-R390_10022_256x402.bin", "1234").forEach {
+        listOf("Москва", "Nekogram", "Dynamic digital", "Жена: привет!", "87 E0 11 27",
+            "com.spotify.music", "SM-R390_10022_256x402.bin", "1173").forEach {
             assertEquals(it, localizer.translate(it))
         }
     }
 
     @Test fun multilineDiagnosticPresentationKeepsNumbers() {
-        assertEquals("Fit3 App · log summary\nConnection: Connected\nSteps: 1234",
-            localizer.translate("Fit3 App · краткий журнал\nСоединение: Подключено\nШаги: 1234"))
+        assertEquals("Fit3 App · log summary\nConnection: Connected\nSteps: 1173",
+            localizer.translate("Fit3 App · краткий журнал\nСоединение: Подключено\nШаги: 1173"))
     }
 }

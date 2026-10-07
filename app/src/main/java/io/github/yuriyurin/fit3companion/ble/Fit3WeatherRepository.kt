@@ -10,14 +10,30 @@ import java.net.URL
 data class WeatherCity(
     val id: Int, val name: String, val region: String, val country: String,
     val latitude: Double, val longitude: Double, val timezone: String,
+    val language: String = "",
 ) {
+    fun localizedBuiltin(language: String): WeatherCity {
+        val names = when (id) {
+            -1 -> "Москва" to "Moscow"
+            -2 -> "Санкт-Петербург" to "Saint Petersburg"
+            -3 -> "Казань" to "Kazan"
+            -4 -> "Новосибирск" to "Novosibirsk"
+            -5 -> "Екатеринбург" to "Yekaterinburg"
+            -6 -> "Ростов-на-Дону" to "Rostov-on-Don"
+            else -> return this
+        }
+        val ru = language == "ru"
+        return copy(name = if (ru) names.first else names.second,
+            region = if (id == -3) if (ru) "Татарстан" else "Tatarstan" else "",
+            country = if (ru) "Россия" else "Russia", language = language)
+    }
     val label: String get() = listOf(name, region, country).filter { it.isNotBlank() }.distinct().joinToString(", ")
     fun json() = JSONObject().put("id", id).put("name", name).put("region", region)
-        .put("country", country).put("lat", latitude).put("lon", longitude).put("timezone", timezone)
+        .put("country", country).put("lat", latitude).put("lon", longitude).put("timezone", timezone).put("language", language)
     companion object {
         fun from(json: JSONObject) = WeatherCity(json.getInt("id"), json.getString("name"),
             json.optString("region"), json.optString("country"), json.getDouble("lat"),
-            json.getDouble("lon"), json.getString("timezone"))
+            json.getDouble("lon"), json.getString("timezone"), json.optString("language"))
     }
 }
 
@@ -67,23 +83,26 @@ class Fit3WeatherRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("fit3_weather", Context.MODE_PRIVATE)
 
     fun selectedCity(): WeatherCity? = prefs.getString("city", null)?.let {
-        runCatching { WeatherCity.from(JSONObject(it)) }.getOrNull()
+        runCatching { WeatherCity.from(JSONObject(it)).localizedBuiltin(io.github.yuriyurin.fit3companion.AppLanguage.locale(context).language) }.getOrNull()
     }
     fun cachedForecast(): WeatherForecast? = prefs.getString("forecast", null)?.let {
         runCatching { WeatherForecast.from(JSONObject(it)) }.getOrNull()
-    }?.takeIf { it.city.id == selectedCity()?.id }
+    }?.takeIf { it.city.id == selectedCity()?.id }?.let {
+        it.copy(city = it.city.localizedBuiltin(io.github.yuriyurin.fit3companion.AppLanguage.locale(context).language))
+    }
     fun selectCity(city: WeatherCity) {
         prefs.edit().putString("city", city.json().toString()).remove("forecast").apply()
     }
     fun save(forecast: WeatherForecast) {
         if (forecast.city.id == selectedCity()?.id)
-            prefs.edit().putString("forecast", forecast.json().toString()).apply()
+            prefs.edit().putString("city", forecast.city.json().toString())
+                .putString("forecast", forecast.json().toString()).apply()
     }
 
     fun search(query: String): List<WeatherCity> {
         val value = query.trim()
         if (value.length < 3) return emptyList() // Open-Meteo: 1 char is empty; 2 chars exact only.
-        val language = io.github.yuriyurin.fit3companion.AppStrings.locale.language
+        val language = io.github.yuriyurin.fit3companion.AppLanguage.locale(context).language
         val url = "https://geocoding-api.open-meteo.com/v1/search?name=${Uri.encode(value)}&count=8&language=$language&format=json"
         val results = fetchJson(url).optJSONArray("results") ?: return emptyList()
         return (0 until results.length()).mapNotNull { index ->
@@ -91,13 +110,28 @@ class Fit3WeatherRepository(private val context: Context) {
                 val j = results.getJSONObject(index)
                 WeatherCity(j.getInt("id"), j.getString("name"), j.optString("admin1"),
                     j.optString("country"), j.getDouble("latitude"), j.getDouble("longitude"),
-                    j.optString("timezone", "UTC"))
+                    j.optString("timezone", "UTC"), language)
             }.getOrNull()
         }
     }
 
-    fun forecast(city: WeatherCity): WeatherForecast =
-        runCatching { standardForecast(city) }.getOrElse { ensembleForecast(city) }
+    fun forecast(city: WeatherCity): WeatherForecast {
+        val localized = localizedCity(city)
+        return runCatching { standardForecast(localized) }.getOrElse { ensembleForecast(localized) }
+    }
+
+    private fun localizedCity(city: WeatherCity): WeatherCity {
+        val language = io.github.yuriyurin.fit3companion.AppLanguage.locale(context).language
+        if (city.id < 0) return city.localizedBuiltin(language)
+        if (city.language == language) return city
+        // Resolve the same ID, never substitute a similarly named city or alter its coordinates.
+        return runCatching {
+            val j = fetchJson("https://geocoding-api.open-meteo.com/v1/get?id=${city.id}&language=$language")
+            require(j.getInt("id") == city.id)
+            city.copy(name = j.getString("name"), region = j.optString("admin1"),
+                country = j.optString("country"), language = language)
+        }.getOrDefault(city) // Keep the last name offline and retry on the next refresh.
+    }
 
     private fun standardForecast(city: WeatherCity): WeatherForecast {
         val url = "https://api.open-meteo.com/v1/forecast?latitude=${city.latitude}&longitude=${city.longitude}" +
