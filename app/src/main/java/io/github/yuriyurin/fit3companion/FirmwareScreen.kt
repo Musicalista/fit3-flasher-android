@@ -37,8 +37,19 @@ internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash
                     Text(stringResource(R.string.flasher_bundled_hint), style = MaterialTheme.typography.bodySmall)
                     val pt = java.util.Locale.getDefault().language == "pt"
                     bundled.forEach { item ->
-                        OutlinedButton(onClick = { onBundled(item) }, enabled = !state.busy && !state.checking, modifier = Modifier.fillMaxWidth()) {
-                            Text(item.title + " - " + (if (pt) item.descPt else item.descEn), style = MaterialTheme.typography.bodySmall)
+                        var signed by remember(item.file) { mutableStateOf<Boolean?>(null) }
+                        LaunchedEffect(item.file) {
+                            signed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                runCatching { FirmwareBundle.verifySignature(FirmwareBundle.build(context, item).readBytes(), FirmwareBundle.signatureBytes(context, item)) }.getOrNull()
+                            }
+                        }
+                        Column {
+                            OutlinedButton(onClick = { onBundled(item) }, enabled = !state.busy && !state.checking, modifier = Modifier.fillMaxWidth()) {
+                                Text(item.title + " - " + (if (pt) item.descPt else item.descEn), style = MaterialTheme.typography.bodySmall)
+                            }
+                            val sigText = when { item.isStock -> stringResource(R.string.flasher_sig_stock); signed == true -> stringResource(R.string.flasher_sig_ok); signed == false -> stringResource(R.string.flasher_sig_none); else -> "…" }
+                            val sigColor = if (item.isStock) MaterialTheme.colorScheme.onSurfaceVariant else if (signed == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            Text(sigText, style = MaterialTheme.typography.labelSmall, color = sigColor, modifier = Modifier.padding(start = 4.dp, top = 2.dp))
                         }
                     }
                 }

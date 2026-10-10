@@ -3,7 +3,12 @@ package io.github.yuriyurin.fit3companion.ble
 import android.content.Context
 import java.io.File
 import java.io.InputStream
+import java.security.KeyFactory
 import java.security.MessageDigest
+import java.security.PublicKey
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
 
 /**
  * Ready-made firmware packages shipped inside the app (fork addition, GPLv3 like the rest of the project).
@@ -18,6 +23,24 @@ data class BundledFirmware(val file: String, val descPt: String, val descEn: Str
 }
 
 object FirmwareBundle {
+    /** Public half of the "Fit3 mods" project's own release-signing key (RSA-3072, SubjectPublicKeyInfo DER, base64).
+     * This proves a bundled package was built and signed by that project; it is NOT a fix for the watch's missing firmware
+     * signature check (only Samsung can fix that -- see FORK.md) and never applies to the stock Samsung package. */
+    private const val PUBLIC_KEY_SPKI_B64 = "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAm2mPmXWF2Cyp1NVz3VoDtfAKX0bh+9HaLBpmh50IT9irI35zaYGrhiq5JuJd5zEmQvUSbStKbY2xMBPuQBWx4xgNshplPZZgODiD0i6R8fuVBy4QBRS6XNBpPlU+kPNsEJbe0tyrMoDK4sgEgnXt2HNcFUV2wj8xyObOEH/IKKclsjFCr5GHjjvkkNGlXHd28MtpSpgH/M6zkfa79CvzlPMzvhwtdeB+YKRbKla4EIPOet5TDCo364Jl8jr1jUAJs2Z3CsjorAA+5IfHPs9tkRthNMlOu7oGTLonZ8+1ZfZcBkpx9uG3OlnG1T9D/+I2mgJLeurkuk9j6M0uJYQL4gGf8+WVXrQFDpAd5UYvOJuori6Z0Rjiud2OUJ+KCrcgPPx7VTqTr2rlxnhxK7LkdccCZkAZhVuq9pakeXPgqlotuLGhlG/PkCV6oDO7Bxh5oe8IyxpIgQbP5wEdDjEMGY/dlOTzVx6KKFbVfWr8RyWOjHN7uphRotO8tymLHDvZAgMBAAE="
+    private val publicKey: PublicKey by lazy {
+        KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(PUBLIC_KEY_SPKI_B64)))
+    }
+    /** true only if `sig` (raw PKCS#1 v1.5 / SHA-256 bytes) verifies over `data` with the project's key. Never throws. */
+    fun verifySignature(data: ByteArray, sig: ByteArray?): Boolean {
+        if (sig == null || sig.isEmpty()) return false
+        return runCatching { Signature.getInstance("SHA256withRSA").apply { initVerify(publicKey); update(data) }.verify(sig) }.getOrDefault(false)
+    }
+    /** Reads the sibling .sig asset for a bundled item (fw/<name>.bin.sig), or null if this copy of the app does not have it. */
+    fun signatureBytes(context: Context, item: BundledFirmware): ByteArray? = runCatching {
+        val sigName = (if (item.isStock) "stock-aza3.bin" else item.file.removeSuffix(".dlt") + ".bin") + ".sig"
+        context.assets.open("fw/$sigName").readAllBytesCompat()
+    }.getOrNull()
+
     fun list(context: Context): List<BundledFirmware> = runCatching {
         context.assets.open("fw/fw_list.txt").use { it.readBytes() }.toString(Charsets.UTF_8).lineSequence().mapNotNull { line ->
             val f = line.trim().split(";")
