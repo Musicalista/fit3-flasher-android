@@ -10,10 +10,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import io.github.yuriyurin.fit3companion.ble.BleSnapshot
+import io.github.yuriyurin.fit3companion.ble.BundledFirmware
+import io.github.yuriyurin.fit3companion.ble.FirmwareBundle
 
 @Composable
-internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash: (Boolean) -> Unit) {
+internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash: (Boolean) -> Unit, onBundled: (BundledFirmware) -> Unit = {}) {
     val state = snapshot.firmwareFlash
     val info = state.info
     var accepted by remember(info?.sha256) { mutableStateOf(false) }
@@ -21,6 +24,22 @@ internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash
         Text(stringResource(R.string.flasher_warning), style = MaterialTheme.typography.bodyMedium)
         Button(onClick = onChoose, enabled = !state.busy && !state.checking) {
             Text(stringResource(R.string.flasher_choose))
+        }
+        val context = LocalContext.current
+        val bundled = remember { FirmwareBundle.list(context) }
+        if (bundled.isNotEmpty()) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.flasher_bundled_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.flasher_bundled_hint), style = MaterialTheme.typography.bodySmall)
+                    val pt = java.util.Locale.getDefault().language == "pt"
+                    bundled.forEach { item ->
+                        OutlinedButton(onClick = { onBundled(item) }, enabled = !state.busy && !state.checking, modifier = Modifier.fillMaxWidth()) {
+                            Text(item.title + " - " + (if (pt) item.descPt else item.descEn), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
         }
         if (state.checking) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (info != null) {

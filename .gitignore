@@ -43,3 +43,6 @@ backups/
 private/
 
 # Keep the Gradle wrapper JAR tracked; do not ignore all JAR files.
+
+# Fork: ready-made firmware assets are generated locally (stock firmware is Samsung property; see FORK.md)
+app/src/main/assets/fw/

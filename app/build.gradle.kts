@@ -9,11 +9,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.yuriyurin.fit3companion"
+        applicationId = "io.github.yuriyurin.fit3companion.mods"   // fork: installs next to the original app
         minSdk = 29
         targetSdk = 35
         versionCode = 83
-        versionName = "0.7.0b12"
+        versionName = "0.7.0b12-mods1"
         testInstrumentationRunner = providers.gradleProperty("fit3TestRunner").getOrElse("io.github.yuriyurin.fit3companion.HealthStorageSmoke")
     }
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flasher_bundled_title">Firmwares prontos (incluídos neste app)</string>
+    <string name="flasher_bundled_hint">Toque em um para prepará-lo, aceite o risco e grave. O pacote stock restaura o firmware original.</string>
+</resources>

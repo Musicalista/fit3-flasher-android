@@ -21,4 +21,6 @@
     <string name="flasher_command_sent">Команда обновления отправлена. Браслет может перезагрузиться. Завершение установки ещё не подтверждено.</string>
     <string name="flasher_reconnect">После переподключения проверьте браслет и версию прошивки.</string>
     <string name="flasher_uncertain">Доставка команды обновления не подтверждена. Проверьте браслет и не повторяйте прошивку сразу.</string>
+    <string name="flasher_bundled_title">Готовые прошивки (внутри этой сборки)</string>
+    <string name="flasher_bundled_hint">Нажмите на нужную, примите риск и прошейте. Пакет stock возвращает оригинальную прошивку.</string>
 </resources>

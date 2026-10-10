@@ -324,6 +324,12 @@ class MainActivity : ComponentActivity() {
             backupMessage = "Папка для автоматических копий выбрана"
         } catch (error: Exception) { backupMessage = "Нет доступа к папке: ${error.message}" }
     }
+    private fun chooseBundledFirmware(item: io.github.yuriyurin.fit3companion.ble.BundledFirmware) {
+        Thread {
+            val file = runCatching { io.github.yuriyurin.fit3companion.ble.FirmwareBundle.build(this, item) }
+            runOnUiThread { file.onSuccess { connectionService?.chooseFirmware(android.net.Uri.fromFile(it)) } }
+        }.start()
+    }
     private val chooseFirmware = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) connectionService?.chooseFirmware(uri)
     }
@@ -530,6 +536,7 @@ class MainActivity : ComponentActivity() {
                         if (it) startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },
                     onChooseFirmware = { chooseFirmware.launch(arrayOf("application/octet-stream", "*/*")) },
+                    onBundledFirmware = { item -> chooseBundledFirmware(item) },
                     onFlashFirmware = { connectionService?.flashFirmware(it) },
                     customLibrary = customFaceLibrary,
                     customFaces = customFaces,
@@ -992,6 +999,7 @@ private fun CompanionScreen(
     showListenerAccessPrompt: Boolean,
     onListenerAccessPrompt: (Boolean) -> Unit,
     onChooseFirmware: () -> Unit,
+    onBundledFirmware: (io.github.yuriyurin.fit3companion.ble.BundledFirmware) -> Unit,
     onFlashFirmware: (Boolean) -> Unit,
     customLibrary: io.github.yuriyurin.fit3companion.ble.CustomFaceLibrary,
     customFaces: List<io.github.yuriyurin.fit3companion.ble.CustomFace>,
@@ -1809,7 +1817,7 @@ private fun CompanionScreen(
                 Page.FIT3UI -> { item { Fit3UiScreen(snapshot) } }
                 Page.FILES -> { item { FileManagerScreen(snapshot) } }
                 Page.FLASHER -> {
-                    item { FirmwareScreen(snapshot, onChooseFirmware, onFlashFirmware) }
+                    item { FirmwareScreen(snapshot, onChooseFirmware, onFlashFirmware, onBundledFirmware) }
                 }
             }
             }

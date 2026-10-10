@@ -1,3 +1,6 @@
+## 0.7.0b12-mods1 (fork)
+- Added the "Ready-made firmwares" card (see FORK.md). Modified 2025-2026 by the fork author; based on yuriyurin/Fit3-App 0.7.0b12 (GPL-3.0).
+
 # Changelog
 
 ## 0.7.0b12

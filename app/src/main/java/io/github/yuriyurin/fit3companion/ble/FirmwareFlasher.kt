@@ -47,7 +47,7 @@ internal class FirmwareFlasher(private val context: Context, private val onUpdat
             val temporary = File(context.filesDir, "selected-firmware.tmp")
             val result = runCatching {
                 val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                    ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Fit3 firmware"
+                    ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: uri.lastPathSegment ?: "Fit3 firmware"
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     temporary.outputStream().use { output ->
                         val buffer = ByteArray(64 * 1024)
