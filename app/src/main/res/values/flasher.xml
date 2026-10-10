@@ -23,4 +23,5 @@
     <string name="flasher_uncertain">Update command delivery is uncertain. Check the band; do not retry immediately.</string>
     <string name="flasher_bundled_title">Ready-made firmwares (included in this build)</string>
     <string name="flasher_bundled_hint">Tap one to prepare it, then accept the risk and flash. The stock package restores the original firmware.</string>
+    <string name="home_firmwares">Firmwares (flash the watch)</string>
 </resources>

@@ -23,4 +23,5 @@
     <string name="flasher_uncertain">Доставка команды обновления не подтверждена. Проверьте браслет и не повторяйте прошивку сразу.</string>
     <string name="flasher_bundled_title">Готовые прошивки (внутри этой сборки)</string>
     <string name="flasher_bundled_hint">Нажмите на нужную, примите риск и прошейте. Пакет stock возвращает оригинальную прошивку.</string>
+    <string name="home_firmwares">Прошивки (прошить браслет)</string>
 </resources>

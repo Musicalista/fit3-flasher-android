@@ -859,7 +859,8 @@ private enum class Page(val label: String) {
 private fun Page.backDestination(): Page? = when (this) {
     Page.HOME -> null
     Page.ACTIVITY, Page.FACES, Page.SETTINGS, Page.DISCOVERY -> Page.HOME
-    Page.FLASHER, Page.FILES, Page.FIT3UI -> Page.DEBUG
+    Page.FLASHER -> Page.HOME
+    Page.FILES, Page.FIT3UI -> Page.DEBUG
     Page.PROTOCOL_LOG, Page.CONNECTION_STATE -> Page.DEBUG
     Page.ERROR_REPORT -> Page.DEBUG
     Page.FACE_GALLERY, Page.CUSTOM_FACES, Page.WATCH_SETTINGS, Page.WATCH_MODES, Page.WATCH_LAYOUT,
@@ -1295,6 +1296,12 @@ private fun CompanionScreen(
                         item { TodayHeader() }
                         item { HomeWeatherCard(snapshot) { showCityDialog = true } }
                         item { HomeHealthSummary(snapshot) { onPage(Page.ACTIVITY) } }
+                    }
+                    if (!homeEditing) item(key = "home-firmwares") {
+                        // fork addition: quick access to the firmware flasher and the ready-made firmwares
+                        FilledTonalButton(onClick = { onPage(Page.FLASHER) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.home_firmwares))
+                        }
                     }
                 }
                 Page.DISCOVERY -> {

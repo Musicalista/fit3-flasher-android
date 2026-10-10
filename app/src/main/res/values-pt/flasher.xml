@@ -2,4 +2,5 @@
 <resources>
     <string name="flasher_bundled_title">Firmwares prontos (incluídos neste app)</string>
     <string name="flasher_bundled_hint">Toque em um para prepará-lo, aceite o risco e grave. O pacote stock restaura o firmware original.</string>
+    <string name="home_firmwares">Firmwares (gravar no relógio)</string>
 </resources>
