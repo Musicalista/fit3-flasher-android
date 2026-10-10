@@ -16,7 +16,7 @@ import io.github.yuriyurin.fit3companion.ble.BundledFirmware
 import io.github.yuriyurin.fit3companion.ble.FirmwareBundle
 
 @Composable
-internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash: (Boolean) -> Unit, onBundled: (BundledFirmware) -> Unit = {}) {
+internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash: (Boolean) -> Unit, onBundled: (BundledFirmware) -> Unit = {}, onPairClassic: () -> Unit = {}) {
     val state = snapshot.firmwareFlash
     val info = state.info
     var accepted by remember(info?.sha256) { mutableStateOf(false) }
@@ -24,6 +24,9 @@ internal fun FirmwareScreen(snapshot: BleSnapshot, onChoose: () -> Unit, onFlash
         Text(stringResource(R.string.flasher_warning), style = MaterialTheme.typography.bodyMedium)
         Button(onClick = onChoose, enabled = !state.busy && !state.checking) {
             Text(stringResource(R.string.flasher_choose))
+        }
+        OutlinedButton(onClick = onPairClassic, enabled = !state.busy && !state.checking, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.flasher_pair_classic))
         }
         val context = LocalContext.current
         val bundled = remember { FirmwareBundle.list(context) }

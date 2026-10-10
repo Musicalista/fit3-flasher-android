@@ -298,6 +298,7 @@ class Fit3ConnectionService : Service() {
     }
     fun cancelFileOperation() = fileManager.cancel()
     fun chooseFirmware(uri: Uri) = firmwareFlasher.choose(uri)
+    fun pairClassicBluetooth() = firmwareFlasher.pairClassic(ble.connectedFirmwareAddress())
 
     fun flashFirmware(accepted: Boolean) {
         if (fileManager.busy) return

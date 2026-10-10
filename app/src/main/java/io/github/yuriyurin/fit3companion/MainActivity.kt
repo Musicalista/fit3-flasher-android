@@ -537,6 +537,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onChooseFirmware = { chooseFirmware.launch(arrayOf("application/octet-stream", "*/*")) },
                     onBundledFirmware = { item -> chooseBundledFirmware(item) },
+                    onPairClassicFirmware = { connectionService?.pairClassicBluetooth() },
                     onFlashFirmware = { connectionService?.flashFirmware(it) },
                     customLibrary = customFaceLibrary,
                     customFaces = customFaces,
@@ -1001,6 +1002,7 @@ private fun CompanionScreen(
     onListenerAccessPrompt: (Boolean) -> Unit,
     onChooseFirmware: () -> Unit,
     onBundledFirmware: (io.github.yuriyurin.fit3companion.ble.BundledFirmware) -> Unit,
+    onPairClassicFirmware: () -> Unit,
     onFlashFirmware: (Boolean) -> Unit,
     customLibrary: io.github.yuriyurin.fit3companion.ble.CustomFaceLibrary,
     customFaces: List<io.github.yuriyurin.fit3companion.ble.CustomFace>,
@@ -1824,7 +1826,7 @@ private fun CompanionScreen(
                 Page.FIT3UI -> { item { Fit3UiScreen(snapshot) } }
                 Page.FILES -> { item { FileManagerScreen(snapshot) } }
                 Page.FLASHER -> {
-                    item { FirmwareScreen(snapshot, onChooseFirmware, onFlashFirmware, onBundledFirmware) }
+                    item { FirmwareScreen(snapshot, onChooseFirmware, onFlashFirmware, onBundledFirmware, onPairClassicFirmware) }
                 }
             }
             }

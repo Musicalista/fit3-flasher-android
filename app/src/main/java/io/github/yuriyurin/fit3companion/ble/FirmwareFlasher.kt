@@ -40,6 +40,25 @@ internal class FirmwareFlasher(private val context: Context, private val onUpdat
     }
     private fun note(value: String) = update(state.copy(log = (state.log + value).takeLast(80)))
 
+    /** Fork: asks Android for a classic (BR/EDR) bond with the band from inside the app, which also avoids the Samsung "open Galaxy Wearable" redirect of the system settings. */
+    fun pairClassic(address: String?) {
+        if (busy) return
+        val target = address ?: run { note("Connect to the band first (home screen)."); return }
+        worker.execute {
+            runCatching {
+                val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+                val device = adapter.getRemoteDevice(target)
+                main.post { note("Classic Bluetooth: searching for the band (6 s)...") }
+                runCatching { adapter.cancelDiscovery(); adapter.startDiscovery() }
+                Thread.sleep(6000); runCatching { adapter.cancelDiscovery() }
+                val ok = runCatching { device.javaClass.getMethod("createBond", Int::class.javaPrimitiveType).invoke(device, 1) as Boolean }
+                    .recoverCatching { device.createBond() }.getOrDefault(false)
+                main.post { note(if (ok) "Pairing requested: accept it on the phone and on the band."
+                    else "No new pairing started (already paired, or the band refused). Bond state: ${device.bondState}.") }
+            }.onFailure { e -> main.post { note("Pairing failed: ${e.message}") } }
+        }
+    }
+
     fun choose(uri: Uri) {
         if (busy) return
         update(FirmwareFlashState(checking = true, log = listOf(context.getString(R.string.flasher_checking))))

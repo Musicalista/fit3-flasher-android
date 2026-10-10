@@ -24,4 +24,5 @@
     <string name="flasher_bundled_title">Ready-made firmwares (included in this build)</string>
     <string name="flasher_bundled_hint">Tap one to prepare it, then accept the risk and flash. The stock package restores the original firmware.</string>
     <string name="home_firmwares">Firmwares (flash the watch)</string>
+    <string name="flasher_pair_classic">Pair classic Bluetooth (needed to flash)</string>
 </resources>
