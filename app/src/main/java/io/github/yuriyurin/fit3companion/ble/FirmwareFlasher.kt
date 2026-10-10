@@ -111,11 +111,22 @@ internal class FirmwareFlasher(private val context: Context, private val onUpdat
                 val adapter = context.getSystemService(BluetoothManager::class.java).adapter
                 require(adapter != null && adapter.isEnabled) { "Bluetooth is off" }
                 val device = adapter.getRemoteDevice(targetAddress)
+                // Fork: the band does not always accept the first way of opening the serial link (stale service record, secure/insecure pairing).
+                // 0 = secure + service UUID (upstream), 1 = insecure + UUID, 2 = fixed RFCOMM channel 29, 3 = channel 29 insecure.
+                var mode = 0
+                val serviceUuid = UUID.fromString("db764ac8-4b08-7f25-aafe-59d03c27bae3")
+                fun rfcommChannel(insecure: Boolean): BluetoothSocket = device.javaClass
+                    .getMethod(if (insecure) "createInsecureRfcommSocket" else "createRfcommSocket", Int::class.javaPrimitiveType)
+                    .invoke(device, 29) as BluetoothSocket
                 fun connect(): BluetoothSocket {
                     check(!stopped.get()) { "Flasher stopped" }
                     check(!linkLost) { "Band disconnected before OTA start" }
-                    val channel = device.createRfcommSocketToServiceRecord(
-                        UUID.fromString("db764ac8-4b08-7f25-aafe-59d03c27bae3"))
+                    val channel = when (mode) {
+                        0 -> device.createRfcommSocketToServiceRecord(serviceUuid)
+                        1 -> device.createInsecureRfcommSocketToServiceRecord(serviceUuid)
+                        2 -> rfcommChannel(false)
+                        else -> rfcommChannel(true)
+                    }
                     socket = channel
                     check(!linkLost) { "Band disconnected before OTA start" }
                     val timeout = Runnable { if (socket === channel) runCatching { channel.close() } }
@@ -123,11 +134,29 @@ internal class FirmwareFlasher(private val context: Context, private val onUpdat
                     try { channel.connect() } finally { main.removeCallbacks(timeout) }
                     return channel
                 }
-                Thread.sleep(750)
-                connect().use { channel ->
-                    main.post { note(context.getString(R.string.flasher_transferring)) }
-                    FirmwareTransport.stage(channel.inputStream, channel.outputStream, file) { sent, total ->
-                        main.post { update(state.copy(sent = sent, total = total)) }
+                var sentAny = false
+                var attempt = 0
+                while (true) {
+                    mode = attempt % 4
+                    try {
+                        Thread.sleep(750)
+                        connect().use { channel ->
+                            main.post { note(context.getString(R.string.flasher_transferring)) }
+                            FirmwareTransport.stage(channel.inputStream, channel.outputStream, file) { sent, total ->
+                                if (sent > 0) sentAny = true
+                                main.post { update(state.copy(sent = sent, total = total)) }
+                            }
+                        }
+                        break
+                    } catch (e: Exception) {
+                        runCatching { socket?.close() }; socket = null
+                        // Nothing was sent yet, so trying another way to open the link is safe. Once data went out, never retry automatically.
+                        if (sentAny || attempt >= 3 || stopped.get() || linkLost) throw e
+                        val next = (attempt + 1) % 4
+                        main.post { note("Serial link attempt ${attempt + 1}/4 failed (${e.message}). Trying again: " +
+                            listOf("secure + service", "insecure + service", "channel 29", "channel 29 insecure")[next]) }
+                        attempt++
+                        Thread.sleep(2000)
                     }
                 }
                 socket = null
